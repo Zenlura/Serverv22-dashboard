@@ -6,8 +6,12 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
     kunde_name: '',
     kunde_telefon: '',
     kunde_email: '',
+    kunde_adresse: '',
+    ausweis_typ: '',
+    ausweis_nummer: '',
     von_datum: '',
     bis_datum: '',
+    zustand_bei_ausgabe: '',
     notizen: ''
   })
   const [preisInfo, setPreisInfo] = useState(null)
@@ -71,11 +75,13 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
     }
 
     const gesamtpreis = tagespreis * tage
+    const kaution = 50.00 // Standard-Kaution
 
     setPreisInfo({
       tage,
       tagespreis,
       gesamtpreis,
+      kaution,
       staffel: tage >= 5 ? '5+ Tage Rabatt' : tage >= 3 ? '3+ Tage Rabatt' : 'Tagespreis'
     })
   }
@@ -102,21 +108,26 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
     try {
       setSaving(true)
 
+      // ✅ Backend-Schema konform (VermietungBase)
       const vermietungData = {
         leihrad_id: leihrad.id,
         kunde_name: formData.kunde_name,
         kunde_telefon: formData.kunde_telefon || null,
         kunde_email: formData.kunde_email || null,
+        kunde_adresse: formData.kunde_adresse || null,
+        ausweis_typ: formData.ausweis_typ || null,
+        ausweis_nummer: formData.ausweis_nummer || null,
         von_datum: formData.von_datum,
         bis_datum: formData.bis_datum,
         tagespreis: preisInfo.tagespreis,
         anzahl_tage: preisInfo.tage,
         gesamtpreis: preisInfo.gesamtpreis,
-        status: 'reserviert',
-        rad_abgeholt: false,
-        bezahlt: false,
+        kaution: preisInfo.kaution,
+        zustand_bei_ausgabe: formData.zustand_bei_ausgabe || null,
         notizen: formData.notizen || null
       }
+
+      console.log('📤 Sende Vermietung:', vermietungData)
 
       const response = await fetch('/api/vermietungen', {
         method: 'POST',
@@ -128,10 +139,12 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error('❌ Backend-Fehler:', errorData)
         throw new Error(errorData.detail || `Fehler: ${response.status}`)
       }
 
       const newVermietung = await response.json()
+      console.log('✅ Vermietung erstellt:', newVermietung)
       showToast('Vermietung erfolgreich angelegt!', 'success')
       
       setTimeout(() => {
@@ -139,6 +152,7 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
       }, 1000)
 
     } catch (err) {
+      console.error('❌ Fehler beim Speichern:', err)
       showToast('Fehler: ' + err.message, 'error')
     } finally {
       setSaving(false)
@@ -164,7 +178,7 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Name * <span className="text-red-500">*</span>
+                Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -199,6 +213,50 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
                   value={formData.kunde_email}
                   onChange={(e) => handleChange('kunde_email', e.target.value)}
                   placeholder="max@beispiel.de"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Adresse
+              </label>
+              <input
+                type="text"
+                value={formData.kunde_adresse}
+                onChange={(e) => handleChange('kunde_adresse', e.target.value)}
+                placeholder="Musterstraße 123, 12345 Musterstadt"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ausweis-Typ
+                </label>
+                <select
+                  value={formData.ausweis_typ}
+                  onChange={(e) => handleChange('ausweis_typ', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="">Bitte wählen</option>
+                  <option value="Personalausweis">Personalausweis</option>
+                  <option value="Reisepass">Reisepass</option>
+                  <option value="Führerschein">Führerschein</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ausweis-Nummer
+                </label>
+                <input
+                  type="text"
+                  value={formData.ausweis_nummer}
+                  onChange={(e) => handleChange('ausweis_nummer', e.target.value)}
+                  placeholder="123456789"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                 />
               </div>
@@ -259,6 +317,11 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
                   <span className="font-bold text-gray-900">{preisInfo.tagespreis.toFixed(2)} €</span>
                 </div>
 
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700">Kaution:</span>
+                  <span className="font-bold text-gray-900">{preisInfo.kaution.toFixed(2)} €</span>
+                </div>
+
                 <div className="border-t-2 border-green-300 pt-3 mt-3">
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-bold text-green-900">Gesamtpreis:</span>
@@ -268,7 +331,7 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
 
                 <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mt-4">
                   <p className="text-sm text-yellow-800">
-                    💡 <strong>Zahlung bei Abholung</strong> - Keine Kaution erforderlich
+                    💡 <strong>Kaution wird bei Rückgabe erstattet</strong> (sofern keine Schäden)
                   </p>
                 </div>
               </div>
@@ -280,6 +343,20 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
               ⚠️ {preisInfo.error}
             </div>
           )}
+
+          {/* Zustand bei Ausgabe */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Zustand bei Ausgabe
+            </label>
+            <textarea
+              value={formData.zustand_bei_ausgabe}
+              onChange={(e) => handleChange('zustand_bei_ausgabe', e.target.value)}
+              placeholder="Z.B. kleiner Kratzer am Rahmen, Bremsen quietschen leicht..."
+              rows={2}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+            />
+          </div>
 
           {/* Notizen */}
           <div>

@@ -31,16 +31,26 @@ class LeihradCreate(LeihradBase):
     pass
 
 class LeihradUpdate(BaseModel):
+    """
+    ✅ FIXED - Session 7.2.2026
+    - Tippfehler behoben: rahmenhoeho → rahmenhoehe
+    - Alte Felder entfernt: tagespreis, wochenpreis, kaution
+    - Neue Felder hinzugefügt: preis_1tag, preis_3tage, preis_5tage, kontrollstatus
+    """
     inventarnummer: Optional[str] = None
     marke: Optional[str] = None
     modell: Optional[str] = None
     rahmennummer: Optional[str] = None
     farbe: Optional[str] = None
-    rahmenhoeho: Optional[str] = None
+    rahmenhoehe: Optional[str] = None  # ✅ Tippfehler behoben
     typ: Optional[str] = None
-    tagespreis: Optional[Decimal] = None
-    wochenpreis: Optional[Decimal] = None
-    kaution: Optional[Decimal] = None
+    
+    # ✅ Neue Feldnamen passend zum Model
+    preis_1tag: Optional[Decimal] = None
+    preis_3tage: Optional[Decimal] = None
+    preis_5tage: Optional[Decimal] = None
+    kontrollstatus: Optional[str] = None
+    
     status: Optional[str] = None
     zustand: Optional[str] = None
     letzte_wartung: Optional[datetime] = None

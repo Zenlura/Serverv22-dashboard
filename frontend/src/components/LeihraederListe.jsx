@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import LeihraederBulkImport from './LeihraederBulkImport'
 import LeihraederKalender from './LeihraederKalender'
 import VermietungModal from './VermietungModal'
+import LeihradModal from './LeihradModal'
 import Toast from './Toast'
 
 function LeihraederListe() {
@@ -13,6 +14,8 @@ function LeihraederListe() {
   const [selectedLeihrad, setSelectedLeihrad] = useState(null)
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedVermietung, setSelectedVermietung] = useState(null)
+  const [showLeihradModal, setShowLeihradModal] = useState(false)
+  const [editLeihrad, setEditLeihrad] = useState(null)
 
   useEffect(() => {
     loadData()
@@ -62,6 +65,39 @@ function LeihraederListe() {
     setSelectedLeihrad(null)
     setSelectedDate(null)
     loadData()
+    showToast('Vermietung erfolgreich gespeichert!', 'success')
+  }
+
+  const handleLeihradSave = () => {
+    loadData()
+    showToast(editLeihrad ? 'Leihrad erfolgreich aktualisiert!' : 'Leihrad erfolgreich angelegt!', 'success')
+  }
+
+  const handleEdit = (leihrad) => {
+    setEditLeihrad(leihrad)
+    setShowLeihradModal(true)
+  }
+
+  const handleDelete = async (leihrad) => {
+    if (!confirm(`Leihrad "${leihrad.inventarnummer}" wirklich löschen?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/leihraeder/${leihrad.id}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Fehler beim Löschen')
+      }
+
+      showToast('Leihrad erfolgreich gelöscht', 'success')
+      loadData()
+    } catch (err) {
+      showToast(err.message, 'error')
+    }
   }
 
   const getStatistik = () => {
@@ -95,12 +131,23 @@ function LeihraederListe() {
             <h1 className="text-3xl font-bold text-gray-900">🚲 Leihräder Verwaltung</h1>
             <p className="text-gray-600 mt-1">Übersicht und Kalender für alle Leihräder</p>
           </div>
-          <button
-            onClick={loadData}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
-            🔄 Aktualisieren
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setEditLeihrad(null)
+                setShowLeihradModal(true)
+              }}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+            >
+              ➕ Neues Leihrad
+            </button>
+            <button
+              onClick={loadData}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              🔄 Aktualisieren
+            </button>
+          </div>
         </div>
 
         {/* Statistik Karten */}
@@ -184,6 +231,7 @@ function LeihraederListe() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preis</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kontrolle</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aktionen</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -229,12 +277,49 @@ function LeihraederListe() {
                         {leihrad.kontrollstatus || 'ok'}
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEdit(leihrad)}
+                          className="text-blue-600 hover:text-blue-800 font-medium"
+                          title="Bearbeiten"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleDelete(leihrad)}
+                          className="text-red-600 hover:text-red-800 font-medium"
+                          title="Löschen"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {leihraeder.length === 0 && (
+            <div className="text-center py-12 text-gray-500">
+              <p className="text-lg mb-2">Keine Leihräder vorhanden</p>
+              <p className="text-sm">Klicke auf "Neues Leihrad" um zu starten</p>
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Leihrad Modal (Anlegen/Bearbeiten) */}
+      {showLeihradModal && (
+        <LeihradModal
+          leihrad={editLeihrad}
+          onClose={() => {
+            setShowLeihradModal(false)
+            setEditLeihrad(null)
+          }}
+          onSave={handleLeihradSave}
+        />
       )}
 
       {/* Vermietung Modal */}
