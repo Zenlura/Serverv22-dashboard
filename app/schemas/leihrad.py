@@ -67,18 +67,16 @@ class LeihradResponse(LeihradBase):
 
 class VermietungBase(BaseModel):
     """
-    ✅ UPDATED - Session 7.2.2026
+    ✅ UPDATED - Session 7.2.2026 23:30
     - Ausweis-Typ & Ausweis-Nummer entfernt
     - ausweis_abgeglichen (Checkbox) hinzugefügt
     - Kaution optional (Default 0.00)
+    - kunde_id statt kunde_name/telefon/email/adresse
     """
     leihrad_id: int
     
-    # Kundendaten
-    kunde_name: str = Field(..., max_length=200)
-    kunde_telefon: Optional[str] = Field(None, max_length=50)
-    kunde_email: Optional[str] = Field(None, max_length=200)
-    kunde_adresse: Optional[str] = None
+    # Kundendaten (NEU: nur noch kunde_id)
+    kunde_id: int
     
     # Ausweis (nur Checkbox ob abgeglichen)
     ausweis_abgeglichen: bool = Field(default=False)
@@ -111,25 +109,56 @@ class VermietungUpdate(BaseModel):
     bezahlt_am: Optional[datetime] = None
     notizen: Optional[str] = None
 
-class VermietungResponse(VermietungBase):
+class VermietungResponse(BaseModel):
     """
-    ✅ UPDATED - Session 7.2.2026
+    ✅ UPDATED - Session 7.2.2026 23:35
     - Alle Felder optional die in DB nullable sind
     - erstellt_am optional (falls None bei alten Einträgen)
+    - Alte kunde_name Felder optional (für alte Vermietungen)
+    - kunde_id ist Pflicht (für neue Vermietungen)
     """
     id: int
+    leihrad_id: int
+    kunde_id: Optional[int] = None  # Kann None sein bei alten Vermietungen
+    
+    # Alte Felder (für Backwards-Compatibility)
+    kunde_name: Optional[str] = None
+    kunde_telefon: Optional[str] = None
+    kunde_email: Optional[str] = None
+    kunde_adresse: Optional[str] = None
+    
+    # Ausweis & Zeitraum
+    ausweis_abgeglichen: bool = Field(default=False)
+    von_datum: date
+    bis_datum: date
     rueckgabe_datum: Optional[date] = None
+    
+    # Preise
+    tagespreis: Decimal
+    anzahl_tage: int
+    gesamtpreis: Decimal
+    kaution: Decimal = Field(default=Decimal("0.00"))
+    
+    # Status & Zustand
     status: str
+    zustand_bei_ausgabe: Optional[str] = None
     zustand_bei_rueckgabe: Optional[str] = None
     schaeden: Optional[str] = None
-    kaution_zurueck: Optional[bool] = Field(default=False)  # Optional mit Default
+    
+    # Zahlungen
+    kaution_zurueck: Optional[bool] = Field(default=False)
     bezahlt: bool = Field(default=False)
     bezahlt_am: Optional[datetime] = None
-    erstellt_am: Optional[datetime] = None  # Optional für alte Einträge
+    
+    # Timestamps
+    erstellt_am: Optional[datetime] = None
     rad_abgeholt: Optional[bool] = Field(default=False)
     abholzeit: Optional[datetime] = None
     
-    # Nested Leihrad Info
+    # Notizen
+    notizen: Optional[str] = None
+    
+    # Nested Relations
     leihrad: Optional[LeihradResponse] = None
     
     class Config:

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import KundenModal from './KundenModal'
+import WarnungsModal from './WarnungsModal'
 
 export default function KundenListe({ showToast }) {
   const [kunden, setKunden] = useState([])
@@ -8,6 +9,8 @@ export default function KundenListe({ showToast }) {
   const [selectedKunde, setSelectedKunde] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('alle')
+  const [showWarnungsModal, setShowWarnungsModal] = useState(false)
+  const [warnungsKunde, setWarnungsKunde] = useState(null)
 
   useEffect(() => {
     loadKunden()
@@ -303,6 +306,16 @@ export default function KundenListe({ showToast }) {
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
                         <button
+                          onClick={() => {
+                            setWarnungsKunde(kunde)
+                            setShowWarnungsModal(true)
+                          }}
+                          className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700"
+                          title="Status & Warnungen verwalten"
+                        >
+                          ⚙️ Status
+                        </button>
+                        <button
                           onClick={() => handleEdit(kunde)}
                           className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                         >
@@ -346,6 +359,23 @@ export default function KundenListe({ showToast }) {
             loadKunden()
             showToast?.(selectedKunde ? 'Kunde aktualisiert' : 'Kunde angelegt', 'success')
           }}
+        />
+      )}
+
+      {/* Warnungs-Modal */}
+      {showWarnungsModal && warnungsKunde && (
+        <WarnungsModal
+          kunde={warnungsKunde}
+          onClose={() => {
+            setShowWarnungsModal(false)
+            setWarnungsKunde(null)
+          }}
+          onSave={() => {
+            setShowWarnungsModal(false)
+            setWarnungsKunde(null)
+            loadKunden()
+          }}
+          showToast={showToast}
         />
       )}
     </div>
