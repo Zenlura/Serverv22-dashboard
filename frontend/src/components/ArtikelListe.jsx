@@ -7,40 +7,83 @@ function ArtikelListe() {
   const [artikel, setArtikel] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [searchTerm, setSearchTerm] = useState('')
+  
+  // WICHTIG: Input-Wert GETRENNT von API-Suche
+  const [inputValue, setInputValue] = useState('') // Lokaler Input (behält Focus)
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('') // Für API
+  
   const [selectedArtikel, setSelectedArtikel] = useState(null)
   const [bestellArtikel, setBestellArtikel] = useState(null)
   const [toast, setToast] = useState(null)
+  
+  // Filter & Sortierung
+  const [filterTyp, setFilterTyp] = useState('alle')
+  const [kategorien, setKategorien] = useState([])
+  const [filterKategorie, setFilterKategorie] = useState('alle')
+  const [sortField, setSortField] = useState('artikelnummer') // artikelnummer, bezeichnung, preis, typ
+  const [sortOrder, setSortOrder] = useState('asc') // asc, desc
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalItems, setTotalItems] = useState(0)
-  const [pageSize] = useState(25) // 25 Artikel pro Seite
+  const [pageSize] = useState(25)
 
   // Toast Helper
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
   }
 
-  // Artikel von API laden
+  // NEU: Debounce Effect - wartet 1 Sekunde nach letztem Tastendruck
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(inputValue)
+      setCurrentPage(1) // Zurück zu Seite 1 bei neuer Suche
+    }, 1000) // 1 Sekunde Verzögerung (für Meister die langsam tippen)
+
+    return () => clearTimeout(timer)
+  }, [inputValue])
+
+  // Kategorien laden (einmalig)
+  useEffect(() => {
+    fetchKategorien()
+  }, [])
+
+  // Artikel laden wenn sich Filter/Suche/Pagination ändert
   useEffect(() => {
     fetchArtikel()
-  }, [currentPage, searchTerm]) // Reagiere auf Seiten- und Suchwechsel
+  }, [currentPage, debouncedSearchTerm, filterTyp, filterKategorie, sortField, sortOrder])
+
+  const fetchKategorien = async () => {
+    try {
+      const response = await fetch('/api/kategorien?limit=1000')
+      if (response.ok) {
+        const data = await response.json()
+        setKategorien(data)
+      }
+    } catch (err) {
+      console.error('Fehler beim Laden der Kategorien:', err)
+    }
+  }
 
   const fetchArtikel = async () => {
     try {
       setLoading(true)
       
-      // Build URL mit Pagination und Suche
       const params = new URLSearchParams({
         page: currentPage.toString(),
         page_size: pageSize.toString(),
-        nur_aktive: 'false' // Alle Artikel anzeigen (auch inaktive)
+        nur_aktive: 'false'
       })
       
-      if (searchTerm) {
-        params.append('suche', searchTerm)
+      // Suche
+      if (debouncedSearchTerm) {
+        params.append('suche', debouncedSearchTerm)
+      }
+      
+      // Filter nach Kategorie
+      if (filterKategorie !== 'alle') {
+        params.append('kategorie_id', filterKategorie)
       }
       
       const response = await fetch(`/api/artikel?${params}`)
@@ -51,8 +94,55 @@ function ArtikelListe() {
       
       const data = await response.json()
       
-      // API gibt {items: [...], total: ..., pages: ...} zurück
-      setArtikel(data.items || [])
+      // Client-seitige Sortierung und Typ-Filter (da Backend das nicht unterstützt)
+      let filtered = data.items || []
+      
+      // Filter nach Typ
+      if (filterTyp !== 'alle') {
+        filtered = filtered.filter(art => art.typ === filterTyp)
+      }
+      
+      // Sortierung
+      filtered.sort((a, b) => {
+        let aVal, bVal
+        
+        switch (sortField) {
+          case 'artikelnummer':
+            aVal = a.artikelnummer || ''
+            bVal = b.artikelnummer || ''
+            break
+          case 'bezeichnung':
+            aVal = a.bezeichnung || ''
+            bVal = b.bezeichnung || ''
+            break
+          case 'preis':
+            aVal = parseFloat(a.verkaufspreis) || 0
+            bVal = parseFloat(b.verkaufspreis) || 0
+            break
+          case 'typ':
+            aVal = a.typ || ''
+            bVal = b.typ || ''
+            break
+          case 'bestand':
+            aVal = (a.bestand_lager || 0) + (a.bestand_werkstatt || 0)
+            bVal = (b.bestand_lager || 0) + (b.bestand_werkstatt || 0)
+            break
+          default:
+            aVal = a.artikelnummer || ''
+            bVal = b.artikelnummer || ''
+        }
+        
+        // String-Vergleich
+        if (typeof aVal === 'string') {
+          const comparison = aVal.localeCompare(bVal, 'de')
+          return sortOrder === 'asc' ? comparison : -comparison
+        }
+        
+        // Numerischer Vergleich
+        return sortOrder === 'asc' ? aVal - bVal : bVal - aVal
+      })
+      
+      setArtikel(filtered)
       setTotalItems(data.total || 0)
       setTotalPages(data.pages || 1)
       setError(null)
@@ -64,13 +154,19 @@ function ArtikelListe() {
     }
   }
 
-  // Suche Handler (mit Verzögerung)
-  const handleSearchChange = (value) => {
-    setSearchTerm(value)
-    setCurrentPage(1) // Zurück zu Seite 1 bei neuer Suche
+  // Sortierung umschalten
+  const handleSort = (field) => {
+    if (sortField === field) {
+      // Gleicher Field → Order umschalten
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      // Neuer Field → Default ASC
+      setSortField(field)
+      setSortOrder('asc')
+    }
   }
 
-  // Bestand berechnen (Lager + Werkstatt)
+  // Bestand berechnen
   const getBestand = (artikel) => {
     return (artikel.bestand_lager || 0) + (artikel.bestand_werkstatt || 0)
   }
@@ -93,13 +189,10 @@ function ArtikelListe() {
   }
 
   const handleArtikelSave = (updatedArtikel) => {
-    // Artikel in der Liste aktualisieren
     setArtikel(prev => 
       prev.map(a => a.id === updatedArtikel.id ? updatedArtikel : a)
     )
     setSelectedArtikel(null)
-    // Optionally: Liste neu laden
-    // fetchArtikel()
   }
 
   const handleNachbestellen = (artikel) => {
@@ -109,8 +202,6 @@ function ArtikelListe() {
   const handleBestellungSuccess = (bestellung) => {
     showToast(`Bestellung ${bestellung.bestellnummer} erfolgreich erstellt!`, 'success')
     setBestellArtikel(null)
-    // Optional: Artikel neu laden um aktualisierte Daten zu haben
-    // fetchArtikel()
   }
 
   if (loading) {
@@ -149,32 +240,133 @@ function ArtikelListe() {
     <div className="space-y-6">
       {/* Header mit Suchfeld */}
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">Artikelübersicht</h2>
-            <p className="text-gray-600 text-sm mt-1">
-              {totalItems} Artikel insgesamt · Seite {currentPage} von {totalPages}
-            </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">Artikelübersicht</h2>
+              <p className="text-gray-600 text-sm mt-1">
+                {totalItems} Artikel insgesamt · Seite {currentPage} von {totalPages}
+              </p>
+            </div>
+            
+            {/* Suchfeld - WICHTIG: Nutzt inputValue, nicht debouncedSearchTerm */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Suche nach Nummer oder Bezeichnung..."
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                className="w-full md:w-80 px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <span className="absolute left-3 top-2.5 text-gray-400">🔍</span>
+              {inputValue && (
+                <button
+                  onClick={() => setInputValue('')}
+                  className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              )}
+              {/* Lade-Indikator während Debounce */}
+              {inputValue !== debouncedSearchTerm && (
+                <div className="absolute right-10 top-2.5">
+                  <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                </div>
+              )}
+            </div>
           </div>
-          
-          {/* Suchfeld */}
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Suche nach Nummer oder Bezeichnung..."
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full md:w-80 px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <span className="absolute left-3 top-2.5 text-gray-400">🔍</span>
-            {searchTerm && (
-              <button
-                onClick={() => handleSearchChange('')}
-                className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+
+          {/* Filter & Sortierung */}
+          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+            {/* Typ-Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Typ:</span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setFilterTyp('alle')}
+                  className={`px-3 py-1 text-sm rounded-lg transition ${
+                    filterTyp === 'alle'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Alle
+                </button>
+                <button
+                  onClick={() => setFilterTyp('material')}
+                  className={`px-3 py-1 text-sm rounded-lg transition flex items-center gap-1 ${
+                    filterTyp === 'material'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  📦 Material
+                </button>
+                <button
+                  onClick={() => setFilterTyp('dienstleistung')}
+                  className={`px-3 py-1 text-sm rounded-lg transition flex items-center gap-1 ${
+                    filterTyp === 'dienstleistung'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  ⚙️ Service
+                </button>
+                <button
+                  onClick={() => setFilterTyp('werkzeug')}
+                  className={`px-3 py-1 text-sm rounded-lg transition flex items-center gap-1 ${
+                    filterTyp === 'werkzeug'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  🔧 Werkzeug
+                </button>
+              </div>
+            </div>
+
+            {/* Kategorie-Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Kategorie:</span>
+              <select
+                value={filterKategorie}
+                onChange={(e) => setFilterKategorie(e.target.value)}
+                className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                ✕
+                <option value="alle">Alle Kategorien</option>
+                {kategorien
+                  .filter(k => !k.parent_id) // Nur Hauptkategorien
+                  .map(kat => (
+                    <option key={kat.id} value={kat.id}>
+                      {kat.name}
+                    </option>
+                  ))
+                }
+              </select>
+            </div>
+
+            {/* Sortierung */}
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-sm font-medium text-gray-700">Sortieren:</span>
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value)}
+                className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="artikelnummer">Artikel-Nr.</option>
+                <option value="bezeichnung">Bezeichnung</option>
+                <option value="typ">Typ</option>
+                <option value="bestand">Bestand</option>
+                <option value="preis">Preis</option>
+              </select>
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+                title={sortOrder === 'asc' ? 'Aufsteigend' : 'Absteigend'}
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
               </button>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -185,23 +377,38 @@ function ArtikelListe() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Artikel-Nr.
+                <th 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('artikelnummer')}
+                >
+                  Artikel-Nr. {sortField === 'artikelnummer' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Bezeichnung
+                <th 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('bezeichnung')}
+                >
+                  Bezeichnung {sortField === 'bezeichnung' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Typ
+                <th 
+                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('typ')}
+                >
+                  Typ {sortField === 'typ' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Bestand
+                <th 
+                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('bestand')}
+                >
+                  Bestand {sortField === 'bestand' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   EK
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  VK
+                <th 
+                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('preis')}
+                >
+                  VK {sortField === 'preis' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Hauptlieferant
@@ -214,15 +421,18 @@ function ArtikelListe() {
             <tbody className="bg-white divide-y divide-gray-200">
               {artikel.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
-                    {searchTerm ? 'Keine Artikel gefunden' : 'Keine Artikel vorhanden'}
+                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                    {debouncedSearchTerm ? (
+                      <>Keine Artikel gefunden für "{debouncedSearchTerm}"</>
+                    ) : (
+                      <>Keine Artikel vorhanden</>
+                    )}
                   </td>
                 </tr>
               ) : (
                 artikel.map((art) => {
-                  // Typ-Badge-Konfiguration
                   const typConfig = {
-                    material: { emoji: '🔩', text: 'Material', color: 'bg-blue-100 text-blue-800' },
+                    material: { emoji: '📦', text: 'Material', color: 'bg-blue-100 text-blue-800' },
                     dienstleistung: { emoji: '⚙️', text: 'Service', color: 'bg-purple-100 text-purple-800' },
                     werkzeug: { emoji: '🔧', text: 'Werkzeug', color: 'bg-gray-100 text-gray-800' },
                     sonstiges: { emoji: '📦', text: 'Sonstiges', color: 'bg-gray-100 text-gray-600' }
@@ -241,6 +451,9 @@ function ArtikelListe() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-900">{art.bezeichnung}</div>
+                        {art.kategorie && (
+                          <div className="text-xs text-gray-500">{art.kategorie.name}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-center">
                         <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${typ.color}`}>
@@ -304,12 +517,10 @@ function ArtikelListe() {
       {/* Pagination */}
       <div className="bg-white rounded-lg shadow p-4">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          {/* Info */}
           <div className="text-sm text-gray-600">
             Zeige {artikel.length > 0 ? ((currentPage - 1) * pageSize + 1) : 0} - {Math.min(currentPage * pageSize, totalItems)} von {totalItems} Artikeln
           </div>
           
-          {/* Navigation */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCurrentPage(1)}
@@ -334,11 +545,9 @@ function ArtikelListe() {
               ‹ Zurück
             </button>
             
-            {/* Seiten-Nummern */}
             <div className="flex gap-1">
               {[...Array(totalPages)].map((_, i) => {
                 const pageNum = i + 1
-                // Zeige nur bestimmte Seiten (erste, letzte, aktuelle +/- 2)
                 if (
                   pageNum === 1 ||
                   pageNum === totalPages ||
@@ -405,7 +614,7 @@ function ArtikelListe() {
         </div>
       </div>
 
-      {/* Artikel-Details-Modal */}
+      {/* Modals */}
       {selectedArtikel && (
         <ArtikelDetailsModal
           artikel={selectedArtikel}
@@ -414,7 +623,6 @@ function ArtikelListe() {
         />
       )}
 
-      {/* Bestellung-Erstellen-Modal */}
       {bestellArtikel && (
         <BestellungErstellenModal
           artikel={bestellArtikel}
@@ -423,7 +631,6 @@ function ArtikelListe() {
         />
       )}
 
-      {/* Toast Notifications */}
       {toast && (
         <Toast
           message={toast.message}

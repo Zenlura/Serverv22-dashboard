@@ -98,7 +98,7 @@ function App() {
 
       {/* Main Content */}
       <main className={activeView === 'connect' ? '' : 'container mx-auto px-4 py-8'}>
-        {activeView === 'dashboard' && <Dashboard />}
+        {activeView === 'dashboard' && <Dashboard onNavigate={setActiveView} />}
         {activeView === 'artikel' && <ArtikelListe />}
         {activeView === 'bestellungen' && <BestellungenListe />}
         {activeView === 'reparaturen' && <ReparaturenListe />}
