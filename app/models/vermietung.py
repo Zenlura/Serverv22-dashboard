@@ -7,9 +7,14 @@ Session 7.2.2026
 - ausweis_abgeglichen (BOOLEAN) HINZUGEFÜGT
 - kaution_zurueck hinzugefügt
 - erstellt_am mit server_default=func.now()
+
+Kalender V2 Update (7.2.2026 23:59):
+- anzahl_raeder (Wieviele Räder in dieser Buchung)
+- von_zeit (Geplante Abholzeit, z.B. 10:00)
+- bis_zeit (Geplante Rückgabezeit, z.B. 18:00)
 """
 
-from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Numeric, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Numeric, ForeignKey, Text, Time
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -43,12 +48,17 @@ class Vermietung(Base):
     
     # Zeitraum
     von_datum = Column(Date, nullable=False)
+    von_zeit = Column(Time, nullable=True)  # ✅ Kalender V2: Geplante Abholzeit
     bis_datum = Column(Date, nullable=False)
+    bis_zeit = Column(Time, nullable=True)  # ✅ Kalender V2: Geplante Rückgabezeit
     rueckgabe_datum = Column(Date)
+    
+    # Anzahl Räder (Kalender V2)
+    anzahl_raeder = Column(Integer, nullable=False, default=1)  # ✅ Wieviele Räder
     
     # Abholung
     rad_abgeholt = Column(Boolean, default=False)
-    abholzeit = Column(DateTime)
+    abholzeit = Column(DateTime)  # Tatsächliche Abholung (wenn ausgegeben)
     
     # Preise
     tagespreis = Column(Numeric(10, 2), nullable=False)

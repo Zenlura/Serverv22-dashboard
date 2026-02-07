@@ -159,7 +159,10 @@ def get_vermietungen(
     db: Session = Depends(get_db)
 ):
     """Liste aller Vermietungen"""
-    query = db.query(Vermietung).options(joinedload(Vermietung.leihrad))
+    query = db.query(Vermietung).options(
+        joinedload(Vermietung.leihrad),
+        joinedload(Vermietung.kunde)  # ✅ Kunde-Relation laden für Kalender
+    )
     
     # Filter
     if status:
@@ -295,3 +298,75 @@ def delete_vermietung(vermietung_id: int, db: Session = Depends(get_db)):
     vermietung.status = 'storniert'
     db.commit()
     return {"message": "Vermietung storniert"}
+
+
+# ========== KALENDER V2 ENDPOINTS ==========
+
+@router_vermietung.get("/verfuegbarkeit/")
+def check_verfuegbarkeit(
+    von_datum: date,
+    bis_datum: date,
+    von_zeit: Optional[str] = None,  # Format: "10:00"
+    bis_zeit: Optional[str] = None,  # Format: "18:00"
+    exclude_id: Optional[int] = None,  # Vermietung-ID die ignoriert werden soll (beim Editieren)
+    db: Session = Depends(get_db)
+):
+    """
+    Prüft Verfügbarkeit von Leihrädern für einen Zeitraum.
+    
+    Kalender V2 Feature für Doppelbuchungs-Check.
+    
+    Returns:
+        - verfuegbar: Anzahl verfügbarer Räder
+        - gesamt: Gesamt-Anzahl Räder
+        - belegt: Anzahl belegter Räder
+        - buchungen: Liste der überlappenden Buchungen
+        - kann_buchen: Boolean ob Buchung möglich
+    """
+    
+    # 1. Gesamt-Anzahl Räder ermitteln
+    gesamt_raeder = db.query(Leihrad).filter(
+        Leihrad.status.in_(['verfuegbar', 'verliehen'])
+    ).count()
+    
+    # 2. Überlappende Buchungen finden
+    query = db.query(Vermietung).filter(
+        Vermietung.status.in_(['aktiv', 'reserviert']),
+        Vermietung.von_datum <= bis_datum,
+        Vermietung.bis_datum >= von_datum
+    )
+    
+    # Bei Bearbeitung: Aktuelle Vermietung ignorieren
+    if exclude_id:
+        query = query.filter(Vermietung.id != exclude_id)
+    
+    overlapping = query.all()
+    
+    # 3. Belegte Räder summieren
+    belegt = sum(v.anzahl_raeder for v in overlapping)
+    
+    # 4. Verfügbare Räder berechnen
+    verfuegbar = max(0, gesamt_raeder - belegt)
+    
+    # 5. Buchungs-Details für Frontend
+    buchungen = []
+    for v in overlapping:
+        buchungen.append({
+            "id": v.id,
+            "kunde_name": v.kunde.name if v.kunde else v.kunde_name,
+            "anzahl_raeder": v.anzahl_raeder,
+            "von": v.von_datum.isoformat(),
+            "bis": v.bis_datum.isoformat(),
+            "von_zeit": v.von_zeit.isoformat() if v.von_zeit else None,
+            "bis_zeit": v.bis_zeit.isoformat() if v.bis_zeit else None,
+            "status": v.status
+        })
+    
+    return {
+        "verfuegbar": verfuegbar,
+        "gesamt": gesamt_raeder,
+        "belegt": belegt,
+        "buchungen": buchungen,
+        "kann_buchen": verfuegbar > 0,
+        "warnung": f"Nur noch {verfuegbar} Räder verfügbar" if verfuegbar < 5 else None
+    }

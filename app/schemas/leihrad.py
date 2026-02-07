@@ -1,7 +1,11 @@
 from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import datetime, date
+from typing import Optional, TYPE_CHECKING
+from datetime import datetime, date, time
 from decimal import Decimal
+
+# Conditional import to avoid circular dependencies
+if TYPE_CHECKING:
+    from app.schemas.kunde import KundeResponse
 
 # ========== LEIHRAD SCHEMAS ==========
 
@@ -67,11 +71,13 @@ class LeihradResponse(LeihradBase):
 
 class VermietungBase(BaseModel):
     """
-    ✅ UPDATED - Session 7.2.2026 23:30
+    ✅ UPDATED - Session 7.2.2026 23:59 - Kalender V2
     - Ausweis-Typ & Ausweis-Nummer entfernt
     - ausweis_abgeglichen (Checkbox) hinzugefügt
     - Kaution optional (Default 0.00)
     - kunde_id statt kunde_name/telefon/email/adresse
+    - anzahl_raeder (Wieviele Räder werden gebucht)
+    - von_zeit & bis_zeit (Geplante Abholung/Rückgabe-Zeiten)
     """
     leihrad_id: int
     
@@ -81,9 +87,14 @@ class VermietungBase(BaseModel):
     # Ausweis (nur Checkbox ob abgeglichen)
     ausweis_abgeglichen: bool = Field(default=False)
     
+    # Anzahl Räder (Kalender V2)
+    anzahl_raeder: int = Field(ge=1, le=50, default=1)  # Min 1, Max 50 Räder
+    
     # Zeitraum
     von_datum: date
+    von_zeit: Optional[time] = None  # Geplante Abholzeit (z.B. 10:00)
     bis_datum: date
+    bis_zeit: Optional[time] = None  # Geplante Rückgabezeit (z.B. 18:00)
     
     # Preise
     tagespreis: Decimal
@@ -111,11 +122,12 @@ class VermietungUpdate(BaseModel):
 
 class VermietungResponse(BaseModel):
     """
-    ✅ UPDATED - Session 7.2.2026 23:35
+    ✅ UPDATED - Session 7.2.2026 23:59 - Kalender V2
     - Alle Felder optional die in DB nullable sind
     - erstellt_am optional (falls None bei alten Einträgen)
     - Alte kunde_name Felder optional (für alte Vermietungen)
     - kunde_id ist Pflicht (für neue Vermietungen)
+    - anzahl_raeder, von_zeit, bis_zeit (Kalender V2)
     """
     id: int
     leihrad_id: int
@@ -127,10 +139,15 @@ class VermietungResponse(BaseModel):
     kunde_email: Optional[str] = None
     kunde_adresse: Optional[str] = None
     
+    # Anzahl Räder (Kalender V2)
+    anzahl_raeder: int = Field(default=1)  # Default 1 für alte Einträge
+    
     # Ausweis & Zeitraum
     ausweis_abgeglichen: bool = Field(default=False)
     von_datum: date
+    von_zeit: Optional[time] = None  # Geplante Abholzeit
     bis_datum: date
+    bis_zeit: Optional[time] = None  # Geplante Rückgabezeit
     rueckgabe_datum: Optional[date] = None
     
     # Preise
@@ -160,6 +177,7 @@ class VermietungResponse(BaseModel):
     
     # Nested Relations
     leihrad: Optional[LeihradResponse] = None
+    kunde: Optional['KundeResponse'] = None  # ✅ Kunde-Relation für Kalender-Anzeige
     
     class Config:
         from_attributes = True
