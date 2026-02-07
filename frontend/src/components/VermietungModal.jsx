@@ -7,8 +7,7 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
     kunde_telefon: '',
     kunde_email: '',
     kunde_adresse: '',
-    ausweis_typ: '',
-    ausweis_nummer: '',
+    ausweis_abgeglichen: false,
     von_datum: '',
     bis_datum: '',
     zustand_bei_ausgabe: '',
@@ -75,13 +74,11 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
     }
 
     const gesamtpreis = tagespreis * tage
-    const kaution = 50.00 // Standard-Kaution
 
     setPreisInfo({
       tage,
       tagespreis,
       gesamtpreis,
-      kaution,
       staffel: tage >= 5 ? '5+ Tage Rabatt' : tage >= 3 ? '3+ Tage Rabatt' : 'Tagespreis'
     })
   }
@@ -115,14 +112,13 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
         kunde_telefon: formData.kunde_telefon || null,
         kunde_email: formData.kunde_email || null,
         kunde_adresse: formData.kunde_adresse || null,
-        ausweis_typ: formData.ausweis_typ || null,
-        ausweis_nummer: formData.ausweis_nummer || null,
+        ausweis_abgeglichen: formData.ausweis_abgeglichen,
         von_datum: formData.von_datum,
         bis_datum: formData.bis_datum,
         tagespreis: preisInfo.tagespreis,
         anzahl_tage: preisInfo.tage,
         gesamtpreis: preisInfo.gesamtpreis,
-        kaution: preisInfo.kaution,
+        kaution: 0, // Immer 0 - keine Kaution
         zustand_bei_ausgabe: formData.zustand_bei_ausgabe || null,
         notizen: formData.notizen || null
       }
@@ -231,35 +227,17 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Ausweis-Typ
-                </label>
-                <select
-                  value={formData.ausweis_typ}
-                  onChange={(e) => handleChange('ausweis_typ', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="">Bitte wählen</option>
-                  <option value="Personalausweis">Personalausweis</option>
-                  <option value="Reisepass">Reisepass</option>
-                  <option value="Führerschein">Führerschein</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Ausweis-Nummer
-                </label>
-                <input
-                  type="text"
-                  value={formData.ausweis_nummer}
-                  onChange={(e) => handleChange('ausweis_nummer', e.target.value)}
-                  placeholder="123456789"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                />
-              </div>
+            <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <input
+                type="checkbox"
+                id="ausweis_abgeglichen"
+                checked={formData.ausweis_abgeglichen}
+                onChange={(e) => handleChange('ausweis_abgeglichen', e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+              />
+              <label htmlFor="ausweis_abgeglichen" className="text-sm font-medium text-blue-900 cursor-pointer">
+                ✓ Ausweis abgeglichen
+              </label>
             </div>
           </div>
 
@@ -317,11 +295,6 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
                   <span className="font-bold text-gray-900">{preisInfo.tagespreis.toFixed(2)} €</span>
                 </div>
 
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-700">Kaution:</span>
-                  <span className="font-bold text-gray-900">{preisInfo.kaution.toFixed(2)} €</span>
-                </div>
-
                 <div className="border-t-2 border-green-300 pt-3 mt-3">
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-bold text-green-900">Gesamtpreis:</span>
@@ -329,9 +302,9 @@ function VermietungModal({ leihrad, vorauswahl, onClose, onSave }) {
                   </div>
                 </div>
 
-                <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mt-4">
-                  <p className="text-sm text-yellow-800">
-                    💡 <strong>Kaution wird bei Rückgabe erstattet</strong> (sofern keine Schäden)
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 mt-4">
+                  <p className="text-sm text-blue-800">
+                    💡 <strong>Zahlung bei Abholung</strong>
                   </p>
                 </div>
               </div>

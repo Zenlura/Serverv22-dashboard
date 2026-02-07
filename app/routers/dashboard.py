@@ -120,7 +120,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     # Reservierungen (noch nicht abgeholt)
     reservierungen_offen = db.query(Vermietung).filter(
         and_(
-            Vermietung.status == VermietungStatus.aktiv,
+            Vermietung.status == 'aktiv',
             Vermietung.rad_abgeholt == False
         )
     ).count()
@@ -128,7 +128,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     # Heute zurück erwartet
     vermietungen_heute_zurueck = db.query(Vermietung).filter(
         and_(
-            Vermietung.status == VermietungStatus.aktiv,
+            Vermietung.status == 'aktiv',
             Vermietung.bis_datum == date.today()
         )
     ).count()
@@ -136,7 +136,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     # Überfällige Vermietungen
     vermietungen_ueberfaellig = db.query(Vermietung).filter(
         and_(
-            Vermietung.status == VermietungStatus.aktiv,
+            Vermietung.status == 'aktiv',
             Vermietung.bis_datum < date.today()
         )
     ).count()
@@ -320,7 +320,7 @@ def get_offene_aufgaben(db: Session = Depends(get_db)) -> Dict[str, Any]:
     # === LEIHRÄDER: HEUTE ZURÜCK ERWARTET ===
     vermietungen_heute_zurueck = db.query(Vermietung).filter(
         and_(
-            Vermietung.status == VermietungStatus.aktiv,
+            Vermietung.status == 'aktiv',
             Vermietung.bis_datum == heute_date
         )
     ).order_by(Vermietung.bis_datum.asc()).all()
@@ -328,7 +328,7 @@ def get_offene_aufgaben(db: Session = Depends(get_db)) -> Dict[str, Any]:
     # === LEIHRÄDER: ÜBERFÄLLIG ===
     vermietungen_ueberfaellig = db.query(Vermietung).filter(
         and_(
-            Vermietung.status == VermietungStatus.aktiv,
+            Vermietung.status == 'aktiv',
             Vermietung.bis_datum < heute_date
         )
     ).order_by(Vermietung.bis_datum.asc()).limit(10).all()
@@ -336,7 +336,7 @@ def get_offene_aufgaben(db: Session = Depends(get_db)) -> Dict[str, Any]:
     # === LEIHRÄDER: RESERVIERUNGEN (noch nicht abgeholt) ===
     reservierungen = db.query(Vermietung).filter(
         and_(
-            Vermietung.status == VermietungStatus.aktiv,
+            Vermietung.status == 'aktiv',
             Vermietung.rad_abgeholt == False
         )
     ).order_by(Vermietung.von_datum.asc()).limit(10).all()

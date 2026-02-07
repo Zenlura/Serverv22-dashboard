@@ -92,7 +92,7 @@ def delete_leihrad(leihrad_id: int, db: Session = Depends(get_db)):
     # Check aktive Vermietungen
     aktive_vermietungen = db.query(Vermietung).filter(
         Vermietung.leihrad_id == leihrad_id,
-        Vermietung.status == VermietungStatus.aktiv
+        Vermietung.status == 'aktiv',
     ).count()
     if aktive_vermietungen > 0:
         raise HTTPException(status_code=400, detail="Leihrad hat aktive Vermietungen")
@@ -111,6 +111,41 @@ def update_status(leihrad_id: int, status: str, db: Session = Depends(get_db)):
     db_leihrad.status = status
     db.commit()
     return {"message": "Status geändert"}
+
+@router.post("/sync-status")
+def sync_all_leihrad_status(db: Session = Depends(get_db)):
+    """
+    Synchronisiert den Status aller Leihräder mit aktiven Vermietungen.
+    Setzt Räder ohne aktive Vermietung auf 'verfuegbar'.
+    """
+    # Alle Leihräder holen
+    all_leihraeder = db.query(Leihrad).all()
+    
+    synced = 0
+    errors = []
+    
+    for leihrad in all_leihraeder:
+        # Check ob aktive Vermietung existiert
+        aktive_vermietung = db.query(Vermietung).filter(
+            Vermietung.leihrad_id == leihrad.id,
+            Vermietung.status == 'aktiv'
+        ).first()
+        
+        # Wenn Rad als "verliehen" markiert ist, aber keine aktive Vermietung → Fix!
+        if leihrad.status == LeihradStatus.verliehen and not aktive_vermietung:
+            leihrad.status = LeihradStatus.verfuegbar
+            synced += 1
+    
+    try:
+        db.commit()
+        return {
+            "message": f"Status-Sync abgeschlossen",
+            "synced": synced,
+            "total": len(all_leihraeder)
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Fehler beim Sync: {str(e)}")
 
 # ========== VERMIETUNGEN ENDPOINTS ==========
 
@@ -133,9 +168,9 @@ def get_vermietungen(
         query = query.filter(Vermietung.leihrad_id == leihrad_id)
     if aktiv is not None:
         if aktiv:
-            query = query.filter(Vermietung.status == VermietungStatus.aktiv)
+            query = query.filter(Vermietung.status == 'aktiv')
         else:
-            query = query.filter(Vermietung.status != VermietungStatus.aktiv)
+            query = query.filter(Vermietung.status != 'aktiv')
     
     total = query.count()
     items = query.order_by(Vermietung.von_datum.desc()).offset(skip).limit(limit).all()
@@ -155,23 +190,28 @@ def create_vermietung(vermietung: VermietungCreate, db: Session = Depends(get_db
     # Check keine überlappenden Vermietungen
     overlap = db.query(Vermietung).filter(
         Vermietung.leihrad_id == vermietung.leihrad_id,
-        Vermietung.status == VermietungStatus.aktiv,
+        Vermietung.status == 'aktiv',
         Vermietung.von_datum <= vermietung.bis_datum,
         Vermietung.bis_datum >= vermietung.von_datum
     ).first()
     if overlap:
         raise HTTPException(status_code=400, detail="Leihrad ist in diesem Zeitraum bereits vermietet")
     
-    # Vermietung erstellen
-    db_vermietung = Vermietung(**vermietung.model_dump())
-    db.add(db_vermietung)
-    
-    # Leihrad Status ändern
-    leihrad.status = LeihradStatus.verliehen
-    
-    db.commit()
-    db.refresh(db_vermietung)
-    return db_vermietung
+    try:
+        # Vermietung erstellen
+        db_vermietung = Vermietung(**vermietung.model_dump())
+        db.add(db_vermietung)
+        
+        # Leihrad Status ändern
+        leihrad.status = LeihradStatus.verliehen
+        
+        db.commit()
+        db.refresh(db_vermietung)
+        return db_vermietung
+    except Exception as e:
+        # Bei Fehler: Rollback (setzt auch Leihrad-Status zurück)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Fehler beim Erstellen der Vermietung: {str(e)}")
 
 @router_vermietung.get("/{vermietung_id}", response_model=VermietungResponse)
 def get_vermietung(vermietung_id: int, db: Session = Depends(get_db)):
@@ -217,12 +257,12 @@ def checkin_vermietung(
     if not vermietung:
         raise HTTPException(status_code=404, detail="Vermietung nicht gefunden")
     
-    if vermietung.status != VermietungStatus.aktiv:
+    if vermietung.status != 'aktiv':
         raise HTTPException(status_code=400, detail="Vermietung ist nicht aktiv")
     
     # Update Vermietung
     vermietung.rueckgabe_datum = rueckgabe_datum or date.today()
-    vermietung.status = VermietungStatus.abgeschlossen
+    vermietung.status = 'abgeschlossen'
     if zustand:
         vermietung.zustand_bei_rueckgabe = zustand
     if schaeden:
@@ -247,11 +287,11 @@ def delete_vermietung(vermietung_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Vermietung nicht gefunden")
     
     # Wenn aktiv: Leihrad wieder verfügbar machen
-    if vermietung.status == VermietungStatus.aktiv:
+    if vermietung.status == 'aktiv':
         leihrad = db.query(Leihrad).filter(Leihrad.id == vermietung.leihrad_id).first()
         if leihrad:
             leihrad.status = LeihradStatus.verfuegbar
     
-    vermietung.status = VermietungStatus.storniert
+    vermietung.status = 'storniert'
     db.commit()
     return {"message": "Vermietung storniert"}

@@ -1,14 +1,41 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
 import ArtikelListe from './components/ArtikelListe'
 import BestellungenListe from './components/BestellungenListe'
 import ReparaturenListe from './components/ReparaturenListe'
-import LeihraederListe from './components/LeihraederListe'
+import Leihraeder from './components/Leihraeder'
 import VermietungenListe from './components/VermietungenListe'
+import KundenListe from './components/KundenListe'
 import ConnectScreen from './components/ConnectScreen'
 
 function App() {
   const [activeView, setActiveView] = useState('dashboard')
+  const [toastMessage, setToastMessage] = useState(null)
+
+  // Navigation aus URL lesen beim Start
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const view = urlParams.get('view')
+    if (view && ['dashboard', 'kunden', 'artikel', 'bestellungen', 'reparaturen', 'leihraeder', 'vermietungen', 'connect'].includes(view)) {
+      setActiveView(view)
+    }
+  }, [])
+
+  // Navigation ändern und in URL speichern
+  const handleNavigate = (view) => {
+    setActiveView(view)
+    const url = new URL(window.location)
+    url.searchParams.set('view', view)
+    // Tabs zurücksetzen wenn man die Hauptansicht wechselt
+    url.searchParams.delete('tab')
+    window.history.pushState({}, '', url)
+  }
+
+  // Toast System
+  const showToast = (message, type = 'info') => {
+    setToastMessage({ message, type })
+    setTimeout(() => setToastMessage(null), 3000)
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -23,7 +50,7 @@ function App() {
         <div className="container mx-auto px-4">
           <div className="flex gap-1 border-b border-blue-500 overflow-x-auto">
             <button
-              onClick={() => setActiveView('dashboard')}
+              onClick={() => handleNavigate('dashboard')}
               className={`px-6 py-3 font-medium transition whitespace-nowrap ${
                 activeView === 'dashboard'
                   ? 'bg-white text-blue-600 rounded-t-lg'
@@ -33,7 +60,17 @@ function App() {
               📊 Dashboard
             </button>
             <button
-              onClick={() => setActiveView('artikel')}
+              onClick={() => handleNavigate('kunden')}
+              className={`px-6 py-3 font-medium transition whitespace-nowrap ${
+                activeView === 'kunden'
+                  ? 'bg-white text-blue-600 rounded-t-lg'
+                  : 'text-white hover:bg-blue-500 rounded-t-lg'
+              }`}
+            >
+              👥 Kunden
+            </button>
+            <button
+              onClick={() => handleNavigate('artikel')}
               className={`px-6 py-3 font-medium transition whitespace-nowrap ${
                 activeView === 'artikel'
                   ? 'bg-white text-blue-600 rounded-t-lg'
@@ -43,7 +80,7 @@ function App() {
               📦 Artikel
             </button>
             <button
-              onClick={() => setActiveView('bestellungen')}
+              onClick={() => handleNavigate('bestellungen')}
               className={`px-6 py-3 font-medium transition whitespace-nowrap ${
                 activeView === 'bestellungen'
                   ? 'bg-white text-blue-600 rounded-t-lg'
@@ -53,7 +90,7 @@ function App() {
               🛒 Bestellungen
             </button>
             <button
-              onClick={() => setActiveView('reparaturen')}
+              onClick={() => handleNavigate('reparaturen')}
               className={`px-6 py-3 font-medium transition whitespace-nowrap ${
                 activeView === 'reparaturen'
                   ? 'bg-white text-blue-600 rounded-t-lg'
@@ -63,7 +100,7 @@ function App() {
               🔧 Reparaturen
             </button>
             <button
-              onClick={() => setActiveView('leihraeder')}
+              onClick={() => handleNavigate('leihraeder')}
               className={`px-6 py-3 font-medium transition whitespace-nowrap ${
                 activeView === 'leihraeder'
                   ? 'bg-white text-blue-600 rounded-t-lg'
@@ -73,7 +110,7 @@ function App() {
               🚲 Leihräder
             </button>
             <button
-              onClick={() => setActiveView('vermietungen')}
+              onClick={() => handleNavigate('vermietungen')}
               className={`px-6 py-3 font-medium transition whitespace-nowrap ${
                 activeView === 'vermietungen'
                   ? 'bg-white text-blue-600 rounded-t-lg'
@@ -83,7 +120,7 @@ function App() {
               📋 Vermietungen
             </button>
             <button
-              onClick={() => setActiveView('connect')}
+              onClick={() => handleNavigate('connect')}
               className={`px-6 py-3 font-medium transition whitespace-nowrap ${
                 activeView === 'connect'
                   ? 'bg-white text-blue-600 rounded-t-lg'
@@ -98,14 +135,29 @@ function App() {
 
       {/* Main Content */}
       <main className={activeView === 'connect' ? '' : 'container mx-auto px-4 py-8'}>
-        {activeView === 'dashboard' && <Dashboard onNavigate={setActiveView} />}
-        {activeView === 'artikel' && <ArtikelListe />}
-        {activeView === 'bestellungen' && <BestellungenListe />}
-        {activeView === 'reparaturen' && <ReparaturenListe />}
-        {activeView === 'leihraeder' && <LeihraederListe />}
-        {activeView === 'vermietungen' && <VermietungenListe />}
-        {activeView === 'connect' && <ConnectScreen />}
+        {activeView === 'dashboard' && <Dashboard onNavigate={handleNavigate} showToast={showToast} />}
+        {activeView === 'kunden' && <KundenListe showToast={showToast} />}
+        {activeView === 'artikel' && <ArtikelListe showToast={showToast} />}
+        {activeView === 'bestellungen' && <BestellungenListe showToast={showToast} />}
+        {activeView === 'reparaturen' && <ReparaturenListe showToast={showToast} />}
+        {activeView === 'leihraeder' && <Leihraeder showToast={showToast} />}
+        {activeView === 'vermietungen' && <VermietungenListe showToast={showToast} />}
+        {activeView === 'connect' && <ConnectScreen showToast={showToast} />}
       </main>
+
+      {/* Toast Notifications */}
+      {toastMessage && (
+        <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
+          <div className={`px-6 py-3 rounded-lg shadow-lg text-white ${
+            toastMessage.type === 'success' ? 'bg-green-600' :
+            toastMessage.type === 'error' ? 'bg-red-600' :
+            toastMessage.type === 'warning' ? 'bg-yellow-600' :
+            'bg-blue-600'
+          }`}>
+            {toastMessage.message}
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       {activeView !== 'connect' && (

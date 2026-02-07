@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from .config import settings
-from .routers import artikel, lieferanten, kategorien, bestellungen, reparaturen, leihraeder, dashboard
+from .routers import artikel, lieferanten, kategorien, bestellungen, reparaturen, leihraeder, dashboard, kunden
 
 # FastAPI App
 app = FastAPI(
@@ -35,6 +35,7 @@ app.include_router(reparaturen.router)
 app.include_router(leihraeder.router)
 app.include_router(leihraeder.router_vermietung)
 app.include_router(dashboard.router)  # <- Dashboard!
+app.include_router(kunden.router)  # <- KUNDENKARTEI!
 # Static Files (Uploads)
 files_dir = Path(settings.FILES_DIR)
 files_dir.mkdir(exist_ok=True)

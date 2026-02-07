@@ -66,23 +66,34 @@ class LeihradResponse(LeihradBase):
 # ========== VERMIETUNG SCHEMAS ==========
 
 class VermietungBase(BaseModel):
+    """
+    ✅ UPDATED - Session 7.2.2026
+    - Ausweis-Typ & Ausweis-Nummer entfernt
+    - ausweis_abgeglichen (Checkbox) hinzugefügt
+    - Kaution optional (Default 0.00)
+    """
     leihrad_id: int
+    
+    # Kundendaten
     kunde_name: str = Field(..., max_length=200)
     kunde_telefon: Optional[str] = Field(None, max_length=50)
     kunde_email: Optional[str] = Field(None, max_length=200)
     kunde_adresse: Optional[str] = None
     
-    ausweis_typ: Optional[str] = Field(None, max_length=50)
-    ausweis_nummer: Optional[str] = Field(None, max_length=100)
+    # Ausweis (nur Checkbox ob abgeglichen)
+    ausweis_abgeglichen: bool = Field(default=False)
     
+    # Zeitraum
     von_datum: date
     bis_datum: date
     
+    # Preise
     tagespreis: Decimal
     anzahl_tage: int
     gesamtpreis: Decimal
-    kaution: Decimal
+    kaution: Decimal = Field(default=Decimal("0.00"))  # Optional, Default 0
     
+    # Zustand & Notizen
     zustand_bei_ausgabe: Optional[str] = None
     notizen: Optional[str] = None
 
@@ -101,15 +112,22 @@ class VermietungUpdate(BaseModel):
     notizen: Optional[str] = None
 
 class VermietungResponse(VermietungBase):
+    """
+    ✅ UPDATED - Session 7.2.2026
+    - Alle Felder optional die in DB nullable sind
+    - erstellt_am optional (falls None bei alten Einträgen)
+    """
     id: int
     rueckgabe_datum: Optional[date] = None
     status: str
     zustand_bei_rueckgabe: Optional[str] = None
     schaeden: Optional[str] = None
-    kaution_zurueck: bool
-    bezahlt: bool
+    kaution_zurueck: Optional[bool] = Field(default=False)  # Optional mit Default
+    bezahlt: bool = Field(default=False)
     bezahlt_am: Optional[datetime] = None
-    erstellt_am: datetime
+    erstellt_am: Optional[datetime] = None  # Optional für alte Einträge
+    rad_abgeholt: Optional[bool] = Field(default=False)
+    abholzeit: Optional[datetime] = None
     
     # Nested Leihrad Info
     leihrad: Optional[LeihradResponse] = None
