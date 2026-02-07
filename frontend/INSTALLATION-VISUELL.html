@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radstation Frontend - Installation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 40px;
+        }
+        .step {
+            margin-bottom: 40px;
+            padding: 30px;
+            background: #f8fafc;
+            border-radius: 15px;
+            border-left: 5px solid #2563eb;
+        }
+        .step-number {
+            display: inline-block;
+            background: #2563eb;
+            color: white;
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            text-align: center;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-bottom: 15px;
+        }
+        .step h2 {
+            color: #1e40af;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        .step ol, .step ul {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+        .step li {
+            margin-bottom: 10px;
+        }
+        .code {
+            background: #1e293b;
+            color: #10b981;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+            overflow-x: auto;
+        }
+        .success {
+            background: #d1fae5;
+            border-left: 5px solid #10b981;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .warning {
+            background: #fef3c7;
+            border-left: 5px solid #f59e0b;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .error {
+            background: #fee2e2;
+            border-left: 5px solid #ef4444;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .tip {
+            background: #dbeafe;
+            border-left: 5px solid #3b82f6;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .footer {
+            background: #1e293b;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .checklist {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .checklist-item {
+            padding: 10px;
+            margin: 5px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .checklist-item:last-child {
+            border-bottom: none;
+        }
+        .emoji {
+            font-size: 1.5em;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚴 Radstation Frontend</h1>
+            <p>Installation für Mechaniker</p>
+            <p style="font-size: 0.9em; margin-top: 10px;">Session 1.7 | 01.02.2026</p>
+        </div>
+
+        <div class="content">
+            <div class="checklist">
+                <h3>☑️ Checkliste vor dem Start:</h3>
+                <div class="checklist-item">
+                    ⬜ Node.js installiert? (Wenn nein → Schritt 1)
+                </div>
+                <div class="checklist-item">
+                    ⬜ Backend läuft auf localhost:5000?
+                </div>
+                <div class="checklist-item">
+                    ⬜ 10 Minuten Zeit?
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">1</div>
+                <h2>Node.js installieren (einmalig)</h2>
+                <ol>
+                    <li>Browser öffnen</li>
+                    <li>Gehe zu: <strong>https://nodejs.org/de</strong></li>
+                    <li>Klicke den grünen <strong>"LTS"</strong> Button (z.B. "20.11.0 LTS")</li>
+                    <li>Datei herunterladen und öffnen</li>
+                    <li>Installation: Immer "Weiter" klicken</li>
+                </ol>
+
+                <div class="success">
+                    <strong>✅ Testen:</strong> Terminal öffnen und eingeben:
+                    <div class="code">node --version</div>
+                    Sollte zeigen: <code>v20.x.x</code>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <h2>Terminal öffnen</h2>
+                
+                <h3>Windows:</h3>
+                <ul>
+                    <li>Drücke: <strong>Windows-Taste + R</strong></li>
+                    <li>Tippe: <strong>cmd</strong></li>
+                    <li>Drücke: <strong>Enter</strong></li>
+                </ul>
+
+                <h3 style="margin-top: 15px;">Mac:</h3>
+                <ul>
+                    <li>Drücke: <strong>Cmd + Leertaste</strong></li>
+                    <li>Tippe: <strong>terminal</strong></li>
+                    <li>Drücke: <strong>Enter</strong></li>
+                </ul>
+
+                <div class="tip">
+                    <strong>💡 TIPP:</strong> Du kannst auch Rechtsklick auf den Ordner machen 
+                    und "Terminal hier öffnen" wählen!
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <h2>In den Frontend-Ordner wechseln</h2>
+                
+                <p>Im Terminal eingeben:</p>
+                <div class="code">cd C:\Pfad\zu\deinem\Serverv22\frontend</div>
+
+                <div class="tip">
+                    <strong>💡 EINFACHER:</strong>
+                    <ol>
+                        <li>Öffne den <code>frontend</code> Ordner im Explorer</li>
+                        <li>Ziehe den Ordner ins Terminal-Fenster</li>
+                        <li>Der Pfad wird automatisch eingefügt!</li>
+                        <li>Drücke Enter</li>
+                    </ol>
+                </div>
+
+                <div class="success">
+                    <strong>✅ Check:</strong> Du solltest jetzt sowas sehen:
+                    <div class="code">C:\...\Serverv22\frontend></div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">4</div>
+                <h2>Pakete installieren (einmalig)</h2>
+                
+                <p>Im Terminal eingeben:</p>
+                <div class="code">npm install</div>
+
+                <div class="warning">
+                    <strong>⚠️ WICHTIG:</strong>
+                    <ul>
+                        <li>Das dauert 1-2 Minuten</li>
+                        <li>Viel Text läuft durch - das ist normal!</li>
+                        <li>Nicht schließen während es läuft!</li>
+                    </ul>
+                </div>
+
+                <div class="success">
+                    <strong>✅ Fertig wenn du siehst:</strong>
+                    <div class="code">added 200+ packages in 1m</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">5</div>
+                <h2>Frontend starten</h2>
+                
+                <p>Im Terminal eingeben:</p>
+                <div class="code">npm run dev</div>
+
+                <div class="success">
+                    <strong>✅ Läuft wenn du siehst:</strong>
+                    <div class="code">
+VITE v5.0.8  ready in 234 ms<br><br>
+➜  Local:   http://localhost:3000/
+                    </div>
+                </div>
+
+                <div class="warning">
+                    <strong>⚠️ Das Terminal OFFEN lassen!</strong>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">6</div>
+                <h2>Im Browser öffnen</h2>
+                
+                <ol>
+                    <li>Browser öffnen (Chrome, Firefox, Edge...)</li>
+                    <li>Adresszeile: Tippe <strong>localhost:3000</strong></li>
+                    <li>Enter drücken</li>
+                </ol>
+
+                <div class="success">
+                    <strong>✅ Du solltest sehen:</strong>
+                    <ul>
+                        <li>Blauen Header "Radstation Warenwirtschaft"</li>
+                        <li>Tabelle mit deinen Artikeln</li>
+                        <li>Suchfeld oben rechts</li>
+                        <li>Bestand in Farben (Grün/Gelb/Rot)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">7</div>
+                <h2>Testen & Nutzen</h2>
+                
+                <h3>Was funktioniert:</h3>
+                <ul>
+                    <li>✅ Alle Artikel sehen</li>
+                    <li>✅ Nach Artikeln suchen</li>
+                    <li>✅ Bestand mit Farben:
+                        <ul>
+                            <li>🟢 Grün = Viel Bestand (&gt;10)</li>
+                            <li>🟡 Gelb = Wenig Bestand (1-10)</li>
+                            <li>🔴 Rot = Kein Bestand (0)</li>
+                        </ul>
+                    </li>
+                    <li>✅ Preise formatiert (€)</li>
+                    <li>✅ Lieferanten angezeigt</li>
+                </ul>
+
+                <h3 style="margin-top: 20px;">Probiere aus:</h3>
+                <ol>
+                    <li>Suche nach einem Artikel</li>
+                    <li>Scrolle durch die Liste</li>
+                    <li>Klicke auf "Bearbeiten" (kommt Meldung - wird in Session 1.8 gebaut)</li>
+                </ol>
+            </div>
+
+            <div class="step" style="border-left-color: #ef4444;">
+                <h2>⚠️ Probleme lösen</h2>
+
+                <div class="error">
+                    <strong>Problem: "npm: command not found"</strong><br>
+                    Lösung: Node.js nicht installiert → Zurück zu Schritt 1
+                </div>
+
+                <div class="error">
+                    <strong>Problem: "Cannot GET /api/artikel"</strong><br>
+                    Lösung: Backend läuft nicht!
+                    <ol>
+                        <li>Neues Terminal öffnen</li>
+                        <li>Gehe zu <code>Serverv22/backend</code></li>
+                        <li>Starte: <code>uvicorn main:app --reload</code></li>
+                    </ol>
+                </div>
+
+                <div class="error">
+                    <strong>Problem: Leere Tabelle</strong><br>
+                    Lösung 1: Backend läuft nicht (siehe oben)<br>
+                    Lösung 2: Drücke F12 → Tab "Console" → Screenshot machen und KI zeigen
+                </div>
+
+                <div class="error">
+                    <strong>Problem: "Port 3000 already in use"</strong><br>
+                    Lösung:
+                    <ol>
+                        <li>Öffne <code>vite.config.js</code></li>
+                        <li>Ändere <code>port: 3000</code> zu <code>port: 3001</code></li>
+                        <li>Starte neu: <code>npm run dev</code></li>
+                        <li>Öffne dann: <code>localhost:3001</code></li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="step" style="border-left-color: #ef4444;">
+                <h2>🛑 Beenden</h2>
+                
+                <p><strong>Wenn du fertig bist:</strong></p>
+                <ol>
+                    <li>Gehe zum Terminal (wo Frontend läuft)</li>
+                    <li>Drücke: <strong>Strg + C</strong> (Windows) oder <strong>Cmd + C</strong> (Mac)</li>
+                    <li>Bestätige mit "J" oder "Y"</li>
+                    <li>Terminal schließen</li>
+                </ol>
+
+                <div class="tip">
+                    <strong>💡 Beim nächsten Mal:</strong>
+                    <ul>
+                        <li>✅ <code>npm install</code> überspringen</li>
+                        <li>✅ Nur noch <code>npm run dev</code> starten</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="success" style="font-size: 1.2em; text-align: center; padding: 30px;">
+                <div class="emoji">🎉</div>
+                <strong>GESCHAFFT!</strong>
+                <p style="margin-top: 15px;">
+                    Frontend läuft auf <code>localhost:3000</code><br>
+                    System bereit für Session 1.8 (Artikel bearbeiten)
+                </p>
+            </div>
+
+        </div>
+
+        <div class="footer">
+            <h3>📞 Hilfe benötigt?</h3>
+            <p style="margin-top: 10px;">
+                Screenshot vom Terminal + Browser (F12 → Console)<br>
+                und KI zeigen mit Beschreibung was du gemacht hast
+            </p>
+            <p style="margin-top: 20px; opacity: 0.7;">
+                Session 1.7 | Frontend Setup | 01.02.2026
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,113 @@
+═══════════════════════════════════════════════════════════════
+   🚴 RADSTATION FRONTEND - SCHNELLSTART FÜR MECHANIKER
+═══════════════════════════════════════════════════════════════
+
+📅 Datum: 01.02.2026
+🎯 Session: 1.7 - Artikelliste
+⏱️  Zeit: 10 Minuten
+
+═══════════════════════════════════════════════════════════════
+  SCHRITT 1: NODE.JS INSTALLIEREN (EINMALIG)
+═══════════════════════════════════════════════════════════════
+
+1. Browser öffnen
+2. Gehe zu: https://nodejs.org/de
+3. Klicke den grünen "LTS" Button
+4. Datei herunterladen und installieren
+5. Immer "Weiter" klicken
+
+✅ FERTIG!
+
+═══════════════════════════════════════════════════════════════
+  SCHRITT 2: FRONTEND INSTALLIEREN (EINMALIG)
+═══════════════════════════════════════════════════════════════
+
+1. Terminal öffnen:
+   Windows: Windows-Taste + R → tippe "cmd" → Enter
+   Mac: Cmd + Leertaste → tippe "terminal" → Enter
+
+2. Gehe in den frontend Ordner:
+   
+   cd C:\Pfad\zu\Serverv22\frontend
+   
+   TIPP: Ziehe den Ordner ins Terminal!
+
+3. Installiere Pakete:
+   
+   npm install
+   
+   ⏳ Dauert 1-2 Minuten - nicht schließen!
+
+✅ FERTIG!
+
+═══════════════════════════════════════════════════════════════
+  SCHRITT 3: STARTEN (JEDES MAL)
+═══════════════════════════════════════════════════════════════
+
+1. Terminal öffnen (siehe oben)
+
+2. In den frontend Ordner:
+   
+   cd C:\Pfad\zu\Serverv22\frontend
+
+3. Frontend starten:
+   
+   npm run dev
+
+4. Warte bis du siehst:
+   
+   ➜  Local:   http://localhost:3000/
+
+5. Browser öffnen und eingeben:
+   
+   localhost:3000
+
+✅ LÄUFT!
+
+═══════════════════════════════════════════════════════════════
+  WAS DU SIEHST
+═══════════════════════════════════════════════════════════════
+
+✅ Blauen Header "Radstation Warenwirtschaft"
+✅ Tabelle mit allen Artikeln
+✅ Suchfeld (oben rechts)
+✅ Bestand in Farbe:
+   🟢 Grün = Viel (>10)
+   🟡 Gelb = Wenig (1-10)
+   🔴 Rot = Leer (0)
+
+═══════════════════════════════════════════════════════════════
+  BEENDEN
+═══════════════════════════════════════════════════════════════
+
+1. Gehe zum Terminal
+2. Drücke: Strg + C (Windows) oder Cmd + C (Mac)
+3. Bestätige mit "J"
+4. Terminal schließen
+
+═══════════════════════════════════════════════════════════════
+  PROBLEME?
+═══════════════════════════════════════════════════════════════
+
+"npm not found"
+→ Node.js nicht installiert (Schritt 1)
+
+"Cannot GET /api/artikel"
+→ Backend läuft nicht! Starte zuerst das Backend
+
+Leere Tabelle
+→ Backend läuft nicht
+→ Oder: F12 drücken → Console → Screenshot und KI zeigen
+
+═══════════════════════════════════════════════════════════════
+  BEIM NÄCHSTEN MAL
+═══════════════════════════════════════════════════════════════
+
+✅ npm install überspringen
+✅ Nur noch: npm run dev
+
+═══════════════════════════════════════════════════════════════
+
+🎉 VIEL ERFOLG!
+
+Bei Fragen: Screenshot machen und KI zeigen!
