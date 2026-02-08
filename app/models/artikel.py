@@ -51,8 +51,9 @@ class Artikel(Base):
     # Einheit
     einheit = Column(String(20), default="Stück")  # Stück, Meter, Liter, etc.
     
-    # Lagerort
-    lagerort = Column(String(100))  # z.B. "Regal 3, Fach 2"
+    # Lagerort (NEU: Foreign Key statt nur String)
+    lagerort_id = Column(Integer, ForeignKey("lagerorte.id"), nullable=True)
+    lagerort = Column(String(100))  # DEPRECATED: Wird durch lagerort_id ersetzt, bleibt für Migration
     
     # Status
     aktiv = Column(Boolean, default=True)
@@ -69,6 +70,7 @@ class Artikel(Base):
     artikel_lieferanten = relationship("ArtikelLieferant", back_populates="artikel", cascade="all, delete-orphan")
     bestand_historie = relationship("BestandHistorie", back_populates="artikel", cascade="all, delete-orphan")
     varianten = relationship("ArtikelVariante", back_populates="artikel", cascade="all, delete-orphan")
+    # lagerort_obj = relationship("Lagerort", back_populates="artikel")  # DEAKTIVIERT: Lagerort-Tabelle existiert noch nicht
     
     def __repr__(self):
         return f"<Artikel {self.artikelnummer} - {self.bezeichnung}>"

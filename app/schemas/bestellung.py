@@ -48,8 +48,20 @@ class BestellPositionBase(BaseModel):
     notizen: Optional[str] = None
 
 
+class BestellPositionCreateFromArtikel(BaseModel):
+    """
+    Position aus Inventar-Artikel erstellen (vereinfacht)
+    Artikeldaten werden automatisch geladen
+    """
+    artikel_id: int = Field(..., description="Artikel-ID aus Inventar")
+    menge_bestellt: int = Field(1, ge=1, description="Bestellmenge")
+    einkaufspreis: Optional[Decimal] = Field(None, ge=0, description="EK (optional, sonst aus Artikel)")
+    verkaufspreis: Optional[Decimal] = Field(None, ge=0, description="VK (optional, sonst aus Artikel)")
+    notizen: Optional[str] = None
+
+
 class BestellPositionCreate(BestellPositionBase):
-    """Neue Position erstellen"""
+    """Neue Position erstellen (vollständig, für manuelle Eingabe)"""
     pass
 
 

@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from .config import settings
-from .routers import artikel, lieferanten, kategorien, bestellungen, reparaturen, leihraeder, dashboard, kunden, varianten
+from .routers import artikel, lieferanten, kategorien, bestellungen, reparaturen, leihraeder, dashboard, kunden, varianten, lagerorte
 
 # FastAPI App
 app = FastAPI(
@@ -27,6 +27,7 @@ app.add_middleware(
 )
 
 # Router einbinden
+app.include_router(lagerorte.router)
 app.include_router(artikel.router)
 app.include_router(varianten.router)  # <- VARIANTEN!
 app.include_router(lieferanten.router)  # <- NEU!

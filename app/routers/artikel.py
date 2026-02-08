@@ -41,7 +41,8 @@ def get_artikel_liste(
     # Base Query
     query = db.query(Artikel).options(
         joinedload(Artikel.kategorie),
-        joinedload(Artikel.artikel_lieferanten).joinedload(ArtikelLieferant.lieferant)
+        joinedload(Artikel.artikel_lieferanten).joinedload(ArtikelLieferant.lieferant),
+        joinedload(Artikel.varianten)  # Fix N+1: Load varianten eager (RICHTIGER NAME!)
     )
     
     # Filter: Nur aktive

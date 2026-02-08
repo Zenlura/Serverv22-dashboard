@@ -16,6 +16,8 @@ const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangCl
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('alle');
+  const [expandedBestellung, setExpandedBestellung] = useState(null); // NEU: Aufgeklappte Bestellung
+  const [positionenDetails, setPositionenDetails] = useState({}); // NEU: Positionen-Cache
 
   useEffect(() => {
     loadData();
@@ -94,6 +96,33 @@ const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangCl
     }
   };
 
+  // NEU: Bestellung aufklappen/zuklappen + Positionen laden
+  const handleToggleExpand = async (bestellungId) => {
+    if (expandedBestellung === bestellungId) {
+      // Zuklappen
+      setExpandedBestellung(null);
+    } else {
+      // Aufklappen
+      setExpandedBestellung(bestellungId);
+      
+      // Positionen laden falls noch nicht im Cache
+      if (!positionenDetails[bestellungId]) {
+        try {
+          const response = await fetch(`/api/bestellungen/${bestellungId}`);
+          if (response.ok) {
+            const data = await response.json();
+            setPositionenDetails(prev => ({
+              ...prev,
+              [bestellungId]: data.positionen || []
+            }));
+          }
+        } catch (err) {
+          console.error('Fehler beim Laden der Positionen:', err);
+        }
+      }
+    }
+  };
+
   const StatusBadge = ({ status }) => {
     const config = {
       offen: { color: 'bg-gray-100 text-gray-700', icon: Clock, label: 'Offen' },
@@ -149,6 +178,22 @@ const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangCl
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
+              {/* Aufklapp-Button */}
+              <button
+                onClick={() => handleToggleExpand(bestellung.id)}
+                className="p-0.5 hover:bg-gray-100 rounded transition"
+                title={expandedBestellung === bestellung.id ? "Zuklappen" : "Positionen anzeigen"}
+              >
+                <svg 
+                  className={`w-4 h-4 text-gray-500 transition-transform ${expandedBestellung === bestellung.id ? 'rotate-90' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              
               <h3 className="font-bold text-gray-900">{bestellung.bestellnummer}</h3>
               <StatusBadge status={bestellung.status} />
             </div>
@@ -277,6 +322,51 @@ const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangCl
             )}
           </div>
         </div>
+
+        {/* Aufklappbare Positionen-Liste */}
+        {expandedBestellung === bestellung.id && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Positionen</h4>
+            {positionenDetails[bestellung.id] ? (
+              <div className="space-y-2">
+                {positionenDetails[bestellung.id].map((position) => (
+                  <div key={position.id} className="bg-gray-50 rounded p-3 text-sm">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">
+                          {position.beschreibung}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          Art-Nr: {position.artikelnummer}
+                          {position.etrto && <span className="ml-2">ETRTO: {position.etrto}</span>}
+                        </div>
+                      </div>
+                      <div className="text-right ml-4">
+                        <div className="text-xs text-gray-600">
+                          <span className={position.vollstaendig_geliefert ? 'text-green-600 font-medium' : 'text-yellow-600'}>
+                            {position.menge_geliefert} / {position.menge_bestellt}
+                          </span>
+                          {' '}geliefert
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {Number(position.einkaufspreis).toFixed(2)} € × {position.menge_bestellt} = {' '}
+                          <span className="font-medium text-gray-700">
+                            {(Number(position.einkaufspreis) * Number(position.menge_bestellt)).toFixed(2)} €
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4 text-gray-500">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                <span className="text-xs mt-2 block">Lade Positionen...</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };

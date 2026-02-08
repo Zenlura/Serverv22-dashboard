@@ -21,6 +21,7 @@ from app.schemas.bestellung import (
     BestellungListItem,
     BestellungStatusUpdate,
     BestellPositionCreate,
+    BestellPositionCreateFromArtikel,  # NEU!
     BestellPositionUpdate,
     BestellPositionResponse,
     WareneingangCreate,
@@ -289,10 +290,21 @@ def delete_bestellung(bestellung_id: int, db: Session = Depends(get_db)):
 @router.post("/{bestellung_id}/positionen", response_model=BestellPositionResponse, status_code=status.HTTP_201_CREATED)
 def add_position(
     bestellung_id: int,
-    position_data: BestellPositionCreate,
+    position_data: BestellPositionCreateFromArtikel,
     db: Session = Depends(get_db)
 ):
-    """Position zur Bestellung hinzufügen"""
+    """
+    Position zur Bestellung hinzufügen (vereinfacht)
+    
+    Frontend sendet nur:
+    - artikel_id (required)
+    - menge_bestellt (required)
+    - optional: einkaufspreis, verkaufspreis
+    
+    Backend holt automatisch:
+    - artikelnummer, beschreibung, etrto, zoll_info
+    - preise (falls nicht überschrieben)
+    """
     bestellung = db.query(Bestellung).filter(Bestellung.id == bestellung_id).first()
     
     if not bestellung:
@@ -307,10 +319,26 @@ def add_position(
             detail="Positionen können nur bei offenen oder bestellten Bestellungen hinzugefügt werden"
         )
     
-    # Position erstellen
+    # Artikel laden
+    artikel = db.query(Artikel).filter(Artikel.id == position_data.artikel_id).first()
+    if not artikel:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Artikel {position_data.artikel_id} nicht gefunden"
+        )
+    
+    # Position erstellen mit Daten aus Artikel
     position = BestellPosition(
         bestellung_id=bestellung_id,
-        **position_data.model_dump()
+        artikel_id=artikel.id,
+        artikelnummer=artikel.artikelnummer,
+        beschreibung=artikel.bezeichnung,
+        etrto=getattr(artikel, 'etrto', None),
+        zoll_info=getattr(artikel, 'zoll_info', None),
+        menge_bestellt=position_data.menge_bestellt,
+        einkaufspreis=position_data.einkaufspreis or artikel.einkaufspreis or Decimal(0),
+        verkaufspreis=position_data.verkaufspreis or artikel.verkaufspreis or Decimal(0),
+        notizen=position_data.notizen
     )
     calculate_position_summen(position)
     

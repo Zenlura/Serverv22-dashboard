@@ -26,8 +26,9 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
   const [suchbegriff, setSuchbegriff] = useState('');
   const [neuerArtikel, setNeuerArtikel] = useState(null);
   const [neuePosition, setNeuePosition] = useState({
-    menge: 1,
-    einzelpreis: 0,
+    menge_bestellt: 1,
+    einkaufspreis: 0,
+    verkaufspreis: 0,
     notizen: ''
   });
   const [loading, setLoading] = useState(false);
@@ -84,7 +85,7 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
   // Berechnungen
   const berechneSummen = () => {
     const zwischensumme = positionen.reduce((sum, pos) => {
-      return sum + (Number(pos.menge) * Number(pos.einzelpreis));
+      return sum + (Number(pos.menge_bestellt) * Number(pos.einkaufspreis));
     }, 0);
     const gesamtpreis = zwischensumme + Number(formData.versandkosten);
     return { zwischensumme, gesamtpreis };
@@ -96,8 +97,8 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
   const handlePositionEdit = (position) => {
     setEditingPosition({
       ...position,
-      menge: position.menge,
-      einzelpreis: position.einzelpreis,
+      menge_bestellt: position.menge_bestellt,
+      einkaufspreis: position.einkaufspreis,
       notizen: position.notizen || ''
     });
   };
@@ -107,8 +108,8 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
 
     // Nur bei Entwürfen kann Menge/Preis geändert werden
     if (bestellung.status !== 'offen' && 
-        (editingPosition.menge !== positionen.find(p => p.id === editingPosition.id)?.menge ||
-         editingPosition.einzelpreis !== positionen.find(p => p.id === editingPosition.id)?.einzelpreis)) {
+        (editingPosition.menge_bestellt !== positionen.find(p => p.id === editingPosition.id)?.menge_bestellt ||
+         editingPosition.einkaufspreis !== positionen.find(p => p.id === editingPosition.id)?.einkaufspreis)) {
       showToast('Menge und Preis können nur bei Entwürfen geändert werden', 'warning');
       return;
     }
@@ -116,13 +117,14 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
     try {
       setLoading(true);
       const response = await fetch(
-        `/api/bestellungen/${bestellung.id}/positionen/${editingPosition.id}`,
+        `/api/bestellungen/positionen/${editingPosition.id}`,
         {
-          method: 'PUT',
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            menge: Number(editingPosition.menge),
-            einzelpreis: Number(editingPosition.einzelpreis),
+            menge_bestellt: Number(editingPosition.menge_bestellt),
+            einkaufspreis: Number(editingPosition.einkaufspreis),
+            verkaufspreis: Number(editingPosition.verkaufspreis),
             notizen: editingPosition.notizen
           })
         }
@@ -130,11 +132,11 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
 
       if (!response.ok) throw new Error('Fehler beim Speichern');
 
+      const updatedPosition = await response.json();
+      
       // Aktualisiere lokale Positionen
       setPositionen(positionen.map(p => 
-        p.id === editingPosition.id 
-          ? { ...p, ...editingPosition, gesamtpreis: editingPosition.menge * editingPosition.einzelpreis }
-          : p
+        p.id === editingPosition.id ? updatedPosition : p
       ));
       setEditingPosition(null);
       showToast('Position gespeichert!', 'success');
@@ -183,8 +185,9 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
   const handleArtikelSelect = (artikel) => {
     setNeuerArtikel(artikel);
     setNeuePosition({
-      menge: 1,
-      einzelpreis: artikel.einkaufspreis || 0,
+      menge_bestellt: 1,
+      einkaufspreis: artikel.einkaufspreis || 0,
+      verkaufspreis: artikel.verkaufspreis || 0,
       notizen: ''
     });
     setSuchbegriff('');
@@ -206,21 +209,32 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           artikel_id: neuerArtikel.id,
-          menge: Number(neuePosition.menge),
-          einzelpreis: Number(neuePosition.einzelpreis),
+          menge_bestellt: Number(neuePosition.menge_bestellt),
+          einkaufspreis: Number(neuePosition.einkaufspreis),
+          verkaufspreis: Number(neuePosition.verkaufspreis),
           notizen: neuePosition.notizen
         })
       });
 
-      if (!response.ok) throw new Error('Fehler beim Hinzufügen');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Fehler beim Hinzufügen');
+      }
 
-      const updatedBestellung = await response.json();
-      setPositionen(updatedBestellung.positionen);
+      const newPosition = await response.json();
+      
+      // Position zur Liste hinzufügen
+      setPositionen([...positionen, newPosition]);
       
       // Reset
       setNeuerArtikel(null);
       setShowAddArtikel(false);
-      setNeuePosition({ menge: 1, einzelpreis: 0, notizen: '' });
+      setNeuePosition({ 
+        menge_bestellt: 1, 
+        einkaufspreis: 0, 
+        verkaufspreis: 0,
+        notizen: '' 
+      });
       showToast('Artikel hinzugefügt!', 'success');
     } catch (err) {
       setError(err.message);
@@ -237,7 +251,7 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
       setError(null);
 
       const response = await fetch(`/api/bestellungen/${bestellung.id}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: formData.status,
@@ -420,21 +434,21 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
                           <input
                             type="number"
                             min="1"
-                            value={neuePosition.menge}
-                            onChange={(e) => setNeuePosition({ ...neuePosition, menge: e.target.value })}
+                            value={neuePosition.menge_bestellt}
+                            onChange={(e) => setNeuePosition({ ...neuePosition, menge_bestellt: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Einzelpreis (€)
+                            EK-Preis (€)
                           </label>
                           <input
                             type="number"
                             min="0"
                             step="0.01"
-                            value={neuePosition.einzelpreis}
-                            onChange={(e) => setNeuePosition({ ...neuePosition, einzelpreis: e.target.value })}
+                            value={neuePosition.einkaufspreis}
+                            onChange={(e) => setNeuePosition({ ...neuePosition, einkaufspreis: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
@@ -483,20 +497,20 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
                             <input
                               type="number"
                               min="1"
-                              value={editingPosition.menge}
-                              onChange={(e) => setEditingPosition({ ...editingPosition, menge: e.target.value })}
+                              value={editingPosition.menge_bestellt}
+                              onChange={(e) => setEditingPosition({ ...editingPosition, menge_bestellt: e.target.value })}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               disabled={bestellung.status !== 'offen'}
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">Preis (€)</label>
+                            <label className="block text-xs text-gray-600 mb-1">EK-Preis (€)</label>
                             <input
                               type="number"
                               min="0"
                               step="0.01"
-                              value={editingPosition.einzelpreis}
-                              onChange={(e) => setEditingPosition({ ...editingPosition, einzelpreis: e.target.value })}
+                              value={editingPosition.einkaufspreis}
+                              onChange={(e) => setEditingPosition({ ...editingPosition, einkaufspreis: e.target.value })}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               disabled={bestellung.status !== 'offen'}
                             />
@@ -528,9 +542,9 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
                             {position.artikel?.bezeichnung || 'Artikel'}
                           </div>
                           <div className="text-sm text-gray-500 mt-1">
-                            {position.menge}× à {Number(position.einzelpreis).toFixed(2)} € = {' '}
+                            {position.menge_bestellt}× à {Number(position.einkaufspreis).toFixed(2)} € = {' '}
                             <span className="font-semibold text-gray-900">
-                              {(Number(position.menge) * Number(position.einzelpreis)).toFixed(2)} €
+                              {(Number(position.menge_bestellt) * Number(position.einkaufspreis)).toFixed(2)} €
                             </span>
                           </div>
                         </div>

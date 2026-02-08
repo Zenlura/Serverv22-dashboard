@@ -14,6 +14,7 @@ from .leihrad import Leihrad, LeihradStatus
 from .vermietung import Vermietung, VermietungStatus
 from .vermietung_position import VermietungPosition  # ✨ Phase 5
 from .kunde import Kunde, KundenWarnung  # Kunden-System
+from app.models.lagerort import Lagerort
 
 __all__ = [
     "Kategorie",
