@@ -9,6 +9,23 @@ from decimal import Decimal
 
 
 # ============================================================================
+# Artikel Schema (für Nested Response in BestellPosition)
+# ============================================================================
+
+class ArtikelInBestellung(BaseModel):
+    """Vereinfachte Artikel-Daten für Bestellpositionen"""
+    id: int
+    artikelnummer: str
+    bezeichnung: str
+    beschreibung: Optional[str] = None
+    bestand_lager: int
+    bestand_werkstatt: int
+    
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
 # BestellPosition Schemas
 # ============================================================================
 
@@ -76,7 +93,7 @@ class BestellPositionResponse(BestellPositionBase):
     erstellt_am: datetime
     
     # Artikel-Details (wenn verknüpft)
-    artikel: Optional[dict] = None
+    artikel: Optional[ArtikelInBestellung] = None
     
     class Config:
         from_attributes = True

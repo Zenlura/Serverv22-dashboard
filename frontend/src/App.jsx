@@ -45,6 +45,18 @@ function App() {
     setShowBestellungModal(true)
   }
 
+  const handleEditBestellung = (bestellung) => {
+    // TODO: Bearbeiten-Modal öffnen
+    showToast('Bearbeiten-Funktion wird noch implementiert', 'info')
+    console.log('Bestellung bearbeiten:', bestellung)
+  }
+
+  const handleWareneingangClick = (bestellung) => {
+    // TODO: Wareneingang-Modal öffnen
+    showToast('Wareneingang-Funktion wird noch implementiert', 'info')
+    console.log('Wareneingang für Bestellung:', bestellung)
+  }
+
   const handleBestellungSuccess = (bestellung) => {
     showToast(`Bestellung ${bestellung.bestellnummer} erstellt!`, 'success')
     setBestellungRefreshKey(prev => prev + 1)
@@ -155,6 +167,8 @@ function App() {
           <BestellungenListe 
             showToast={showToast} 
             onNewBestellung={handleNewBestellung}
+            onEditBestellung={handleEditBestellung}
+            onWareneingangClick={handleWareneingangClick}
             refreshKey={bestellungRefreshKey}
           />
         )}
