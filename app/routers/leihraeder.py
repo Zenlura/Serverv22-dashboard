@@ -329,9 +329,7 @@ def check_verfuegbarkeit(
     """
     
     # 1. Gesamt-Anzahl Räder ermitteln
-    gesamt_raeder = db.query(Leihrad).filter(
-        Leihrad.status.in_(['verfuegbar', 'verliehen'])
-    ).count()
+    gesamt_raeder = db.query(Leihrad).count()
     
     # 2. Überlappende Buchungen finden
     query = db.query(Vermietung).options(

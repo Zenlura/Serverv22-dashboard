@@ -14,7 +14,7 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tageAnzahl, setTageAnzahl] = useState(7);
-  const [gesamtRaeder, setGesamtRaeder] = useState(15);
+  const [gesamtRaeder, setGesamtRaeder] = useState(21);  // ✅ Dynamisch vom Backend geladen
 
   useEffect(() => {
     loadTimelineData();
@@ -35,19 +35,18 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
         v.status === 'aktiv' || v.status === 'reserviert'
       );
 
-      if (aktiveBuchungen.length > 0) {
-        const heute = new Date();
-        const verfResponse = await fetch(
-          `/api/vermietungen/verfuegbarkeit/?von_datum=${format(heute, 'yyyy-MM-dd')}&bis_datum=${format(heute, 'yyyy-MM-dd')}`
-        );
-        if (verfResponse.ok) {
-          const verfData = await verfResponse.json();
-          setGesamtRaeder(verfData.gesamt || 15);
-        }
+      // ✅ FIX: Gesamt-Räder IMMER laden (nicht nur wenn aktive Buchungen)
+      const heute = new Date();
+      const verfResponse = await fetch(
+        `/api/vermietungen/verfuegbarkeit/?von_datum=${format(heute, 'yyyy-MM-dd')}&bis_datum=${format(heute, 'yyyy-MM-dd')}`
+      );
+      if (verfResponse.ok) {
+        const verfData = await verfResponse.json();
+        setGesamtRaeder(verfData.gesamt || 21);  // ✅ Default 21 statt 15
       }
 
       const timelineData = [];
-      const heute = new Date();
+      // heute bereits oben deklariert
 
       for (let i = 0; i < tageAnzahl; i++) {
         const tag = addDays(heute, i);
@@ -167,7 +166,8 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
               <div className="flex items-center gap-3 text-xs text-gray-600 mt-0.5">
                 <span className="flex items-center gap-1">
                   <Users size={12} />
-                  {anzahlRaeder} Räder
+                  {anzahlRaeder} {buchung.leihrad?.typ || 'Räder'}
+                  {buchung.leihrad?.typ && anzahlRaeder > 1 && 's'}  {/* Plural wenn mehrere */}
                 </span>
                 <span>→ {format(bisDatum, 'EEE dd.MM', { locale: de })} {buchung.bis_zeit || '—'}</span>
                 {radAbgeholt && (
@@ -230,6 +230,81 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
             {buchung.notizen}
           </div>
         )}
+      </div>
+    );
+  };
+
+  // 📊 Übersichts-Statistik berechnen
+  const getUebersicht = () => {
+    if (timeline.length === 0) return null;
+
+    const durchschnittVerfuegbar = Math.round(
+      timeline.reduce((sum, t) => sum + t.verfuegbar, 0) / timeline.length
+    );
+    
+    const durchschnittBelegt = Math.round(
+      timeline.reduce((sum, t) => sum + t.belegt, 0) / timeline.length
+    );
+
+    const maxBelegt = Math.max(...timeline.map(t => t.belegt));
+    const tageVollBelegt = timeline.filter(t => t.verfuegbar === 0).length;
+    const tageStarkBelegt = timeline.filter(t => t.verfuegbar > 0 && t.verfuegbar < 5).length;
+
+    return {
+      durchschnittVerfuegbar,
+      durchschnittBelegt,
+      maxBelegt,
+      tageVollBelegt,
+      tageStarkBelegt,
+      gesamt: gesamtRaeder
+    };
+  };
+
+  const UebersichtsCard = () => {
+    const stats = getUebersicht();
+    if (!stats) return null;
+
+    return (
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4 mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Bike size={18} className="text-blue-600" />
+          <h3 className="font-bold text-gray-900">Übersicht {tageAnzahl} Tage</h3>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded p-3 border border-blue-100">
+            <div className="text-xs text-gray-600 mb-1">Ø Verfügbar</div>
+            <div className="text-2xl font-bold text-green-600">
+              {stats.durchschnittVerfuegbar}/{stats.gesamt}
+            </div>
+          </div>
+          
+          <div className="bg-white rounded p-3 border border-blue-100">
+            <div className="text-xs text-gray-600 mb-1">Ø Belegt</div>
+            <div className="text-2xl font-bold text-orange-600">
+              {stats.durchschnittBelegt}
+            </div>
+          </div>
+          
+          <div className="bg-white rounded p-3 border border-blue-100">
+            <div className="text-xs text-gray-600 mb-1">Max. belegt</div>
+            <div className="text-2xl font-bold text-red-600">
+              {stats.maxBelegt}
+            </div>
+          </div>
+          
+          <div className="bg-white rounded p-3 border border-blue-100">
+            <div className="text-xs text-gray-600 mb-1">Kritische Tage</div>
+            <div className="text-2xl font-bold text-yellow-600">
+              {stats.tageVollBelegt + stats.tageStarkBelegt}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {stats.tageVollBelegt > 0 && `${stats.tageVollBelegt}× voll`}
+              {stats.tageVollBelegt > 0 && stats.tageStarkBelegt > 0 && ', '}
+              {stats.tageStarkBelegt > 0 && `${stats.tageStarkBelegt}× knapp`}
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -338,6 +413,8 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
           </button>
         </div>
       </div>
+
+      <UebersichtsCard />
 
       <div className="space-y-3">
         {timeline.map((tag) => (
