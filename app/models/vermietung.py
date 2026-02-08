@@ -32,7 +32,7 @@ class Vermietung(Base):
     __tablename__ = "vermietungen"
 
     id = Column(Integer, primary_key=True, index=True)
-    leihrad_id = Column(Integer, ForeignKey("leihraeder.id"), nullable=False)
+    leihrad_id = Column(Integer, ForeignKey("leihraeder.id"), nullable=True)  # ✅ KALENDER V2: Optional für Gruppenbuchungen
     
     # Kunde-Beziehung (NEU - Kundenkartei)
     kunde_id = Column(Integer, ForeignKey("kunden.id"), nullable=True)  # nullable=True für Migration

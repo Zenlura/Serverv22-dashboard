@@ -78,8 +78,9 @@ class VermietungBase(BaseModel):
     - kunde_id statt kunde_name/telefon/email/adresse
     - anzahl_raeder (Wieviele Räder werden gebucht)
     - von_zeit & bis_zeit (Geplante Abholung/Rückgabe-Zeiten)
+    - leihrad_id OPTIONAL für Gruppenbuchungen (Kalender V2)
     """
-    leihrad_id: int
+    leihrad_id: Optional[int] = None  # ✅ KALENDER V2: Optional für Gruppenbuchungen
     
     # Kundendaten (NEU: nur noch kunde_id)
     kunde_id: int
@@ -95,6 +96,9 @@ class VermietungBase(BaseModel):
     von_zeit: Optional[time] = None  # Geplante Abholzeit (z.B. 10:00)
     bis_datum: date
     bis_zeit: Optional[time] = None  # Geplante Rückgabezeit (z.B. 18:00)
+    
+    # Status
+    status: str = Field(default='reserviert')  # ✅ Neue Buchungen sind 'reserviert'
     
     # Preise
     tagespreis: Decimal
@@ -128,9 +132,10 @@ class VermietungResponse(BaseModel):
     - Alte kunde_name Felder optional (für alte Vermietungen)
     - kunde_id ist Pflicht (für neue Vermietungen)
     - anzahl_raeder, von_zeit, bis_zeit (Kalender V2)
+    - leihrad_id OPTIONAL für Gruppenbuchungen
     """
     id: int
-    leihrad_id: int
+    leihrad_id: Optional[int] = None  # ✅ KALENDER V2: Optional für Gruppenbuchungen
     kunde_id: Optional[int] = None  # Kann None sein bei alten Vermietungen
     
     # Alte Felder (für Backwards-Compatibility)

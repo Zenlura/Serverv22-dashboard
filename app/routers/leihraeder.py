@@ -183,30 +183,34 @@ def get_vermietungen(
 @router_vermietung.post("/", response_model=VermietungResponse)
 def create_vermietung(vermietung: VermietungCreate, db: Session = Depends(get_db)):
     """Neue Vermietung erstellen (Check-out)"""
-    # Check Leihrad existiert & verfügbar
-    leihrad = db.query(Leihrad).filter(Leihrad.id == vermietung.leihrad_id).first()
-    if not leihrad:
-        raise HTTPException(status_code=404, detail="Leihrad nicht gefunden")
-    if leihrad.status != LeihradStatus.verfuegbar:
-        raise HTTPException(status_code=400, detail=f"Leihrad ist nicht verfügbar (Status: {leihrad.status})")
     
-    # Check keine überlappenden Vermietungen
-    overlap = db.query(Vermietung).filter(
-        Vermietung.leihrad_id == vermietung.leihrad_id,
-        Vermietung.status == 'aktiv',
-        Vermietung.von_datum <= vermietung.bis_datum,
-        Vermietung.bis_datum >= vermietung.von_datum
-    ).first()
-    if overlap:
-        raise HTTPException(status_code=400, detail="Leihrad ist in diesem Zeitraum bereits vermietet")
+    # ✅ KALENDER V2: Check nur wenn leihrad_id gesetzt
+    if vermietung.leihrad_id:
+        # Check Leihrad existiert & verfügbar
+        leihrad = db.query(Leihrad).filter(Leihrad.id == vermietung.leihrad_id).first()
+        if not leihrad:
+            raise HTTPException(status_code=404, detail="Leihrad nicht gefunden")
+        if leihrad.status != LeihradStatus.verfuegbar:
+            raise HTTPException(status_code=400, detail=f"Leihrad ist nicht verfügbar (Status: {leihrad.status})")
+        
+        # Check keine überlappenden Vermietungen
+        overlap = db.query(Vermietung).filter(
+            Vermietung.leihrad_id == vermietung.leihrad_id,
+            Vermietung.status == 'aktiv',
+            Vermietung.von_datum <= vermietung.bis_datum,
+            Vermietung.bis_datum >= vermietung.von_datum
+        ).first()
+        if overlap:
+            raise HTTPException(status_code=400, detail="Leihrad ist in diesem Zeitraum bereits vermietet")
     
     try:
         # Vermietung erstellen
         db_vermietung = Vermietung(**vermietung.model_dump())
         db.add(db_vermietung)
         
-        # Leihrad Status ändern
-        leihrad.status = LeihradStatus.verliehen
+        # ✅ KALENDER V2: Leihrad Status nur ändern wenn leihrad_id gesetzt
+        if vermietung.leihrad_id:
+            leihrad.status = LeihradStatus.verliehen
         
         db.commit()
         db.refresh(db_vermietung)
@@ -330,7 +334,9 @@ def check_verfuegbarkeit(
     ).count()
     
     # 2. Überlappende Buchungen finden
-    query = db.query(Vermietung).filter(
+    query = db.query(Vermietung).options(
+        joinedload(Vermietung.kunde)  # ✅ WICHTIG: Kunde-Relation laden!
+    ).filter(
         Vermietung.status.in_(['aktiv', 'reserviert']),
         Vermietung.von_datum <= bis_datum,
         Vermietung.bis_datum >= von_datum
@@ -351,9 +357,10 @@ def check_verfuegbarkeit(
     # 5. Buchungs-Details für Frontend
     buchungen = []
     for v in overlapping:
+        # ✅ FIX: Kunde hat 'vorname' und 'nachname', nicht 'name'
         buchungen.append({
             "id": v.id,
-            "kunde_name": v.kunde.name if v.kunde else v.kunde_name,
+            "kunde_name": f"{v.kunde.vorname} {v.kunde.nachname}" if v.kunde else v.kunde_name,
             "anzahl_raeder": v.anzahl_raeder,
             "von": v.von_datum.isoformat(),
             "bis": v.bis_datum.isoformat(),
