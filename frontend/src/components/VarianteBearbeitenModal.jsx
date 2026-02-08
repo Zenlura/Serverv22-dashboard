@@ -26,7 +26,9 @@ const VarianteBearbeitenModal = ({
   const [formData, setFormData] = useState({
     artikelnummer: '',
     barcode: '',
-    etrto: '',
+    spezifikation: '',      // NEU: Universell für KSA18, 28", M5x20mm, etc.
+    kompatibilitaet: '',    // NEU: z.B. "Shimano 11-fach"
+    etrto: '',              // Optional: Nur für Reifen
     zoll_info: '',
     farbe: '',
     preis_ek: '',
@@ -57,6 +59,8 @@ const VarianteBearbeitenModal = ({
       setFormData({
         artikelnummer: variante.artikelnummer || '',
         barcode: variante.barcode || '',
+        spezifikation: variante.spezifikation || '',
+        kompatibilitaet: variante.kompatibilitaet || '',
         etrto: variante.etrto || '',
         zoll_info: variante.zoll_info || '',
         farbe: variante.farbe || '',
@@ -193,7 +197,7 @@ const VarianteBearbeitenModal = ({
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-900 text-sm">Identifikation</h3>
             
-            {/* Hartje-Artikelnummer */}
+            {/* Lieferanten-Artikelnummer */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Lieferanten-Artikelnummer <span className="text-red-500">*</span>
@@ -210,6 +214,56 @@ const VarianteBearbeitenModal = ({
               <p className="text-xs text-gray-500 mt-1">
                 Hartje-Nr, ZEG-Nr, oder andere Lieferanten-Nummer
               </p>
+            </div>
+
+            {/* Spezifikation - HAUPTFELD */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Spezifikation
+              </label>
+              <input
+                type="text"
+                name="spezifikation"
+                value={formData.spezifikation}
+                onChange={handleChange}
+                placeholder="z.B. KSA18 (11-28T), 28x1.85, M5x20mm"
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Universelle Beschreibung: Kassetten-Code, Größe, Maß, etc.
+              </p>
+            </div>
+
+            {/* Kompatibilität */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Kompatibilität
+                <span className="text-gray-400 text-xs ml-1">(optional)</span>
+              </label>
+              <input
+                type="text"
+                name="kompatibilitaet"
+                value={formData.kompatibilitaet}
+                onChange={handleChange}
+                placeholder="z.B. Shimano 11-fach, SRAM eTap"
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Farbe */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Farbe
+                <span className="text-gray-400 text-xs ml-1">(optional)</span>
+              </label>
+              <input
+                type="text"
+                name="farbe"
+                value={formData.farbe}
+                onChange={handleChange}
+                placeholder="z.B. schwarz, weiß, rot"
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
 
             {/* Barcode */}
@@ -233,11 +287,13 @@ const VarianteBearbeitenModal = ({
             </div>
           </div>
 
-          {/* Spezifikation (für Reifen) */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900 text-sm">Spezifikation</h3>
+          {/* ETRTO-Section (nur Reifen/Felgen) - Kollapsiert */}
+          <details className="space-y-4 border rounded-lg p-4 bg-gray-50">
+            <summary className="cursor-pointer font-semibold text-gray-900 text-sm hover:text-blue-600">
+              🚴 Reifen/Felgen-Daten (optional)
+            </summary>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 mt-4">
               {/* ETRTO */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -280,23 +336,7 @@ const VarianteBearbeitenModal = ({
                 />
               </div>
             </div>
-
-            {/* Farbe */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Farbe
-                <span className="text-gray-400 text-xs ml-1">(optional)</span>
-              </label>
-              <input
-                type="text"
-                name="farbe"
-                value={formData.farbe}
-                onChange={handleChange}
-                placeholder="z.B. schwarz, weiß, rot"
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          </div>
+          </details>
 
           {/* Preise */}
           <div className="space-y-4">

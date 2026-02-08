@@ -18,8 +18,12 @@ class ArtikelVariante(Base):
     artikelnummer = Column(String(50), nullable=False, index=True)  # Lieferanten-Nr (z.B. Hartje: 0.754.432/3)
     barcode = Column(String(100), nullable=True, index=True)  # EAN13, Code128, etc. - kann leer sein!
     
-    # Spezifikation (hauptsächlich für Reifen/Schläuche)
-    etrto = Column(String(20), nullable=True)  # z.B. "47-507", "37-622"
+    # Spezifikation (UNIVERSELL - nicht nur Reifen!)
+    spezifikation = Column(String(200), nullable=True)  # z.B. "KSA18 (11-28T)", "28x1.85", "M5x20mm"
+    kompatibilitaet = Column(String(200), nullable=True)  # z.B. "Shimano 11-fach", "SRAM eTap"
+    
+    # Reifen-spezifisch (optional)
+    etrto = Column(String(20), nullable=True)  # z.B. "47-507", "37-622" (nur Reifen/Felgen)
     zoll_info = Column(String(50), nullable=True)  # z.B. "24 x 1,75", "28 x 1,40" (auto-generiert)
     farbe = Column(String(50), nullable=True)  # z.B. "schwarz", "weiß"
     

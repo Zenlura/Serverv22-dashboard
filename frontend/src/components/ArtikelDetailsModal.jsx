@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Toast from './Toast'
+import VarianteBearbeitenModal from './VarianteBearbeitenModal'
 
 function ArtikelDetailsModal({ artikel, onClose, onSave }) {
   const [editMode, setEditMode] = useState(false)
@@ -12,6 +13,12 @@ function ArtikelDetailsModal({ artikel, onClose, onSave }) {
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('basis')
   const [toast, setToast] = useState(null)
+  
+  // Varianten-Management
+  const [varianten, setVarianten] = useState([])
+  const [showVarianteModal, setShowVarianteModal] = useState(false)
+  const [currentVariante, setCurrentVariante] = useState(null) // Für Edit-Mode
+  const [loadingVarianten, setLoadingVarianten] = useState(false)
   
   // Toast Helper
   const showToast = (message, type = 'success') => {
@@ -72,6 +79,35 @@ function ArtikelDetailsModal({ artikel, onClose, onSave }) {
       setLoading(false)
     }
   }
+
+  // Varianten laden (nur wenn hat_varianten = true)
+  const loadVarianten = async () => {
+    if (!artikel?.hat_varianten) return
+    
+    try {
+      setLoadingVarianten(true)
+      const response = await fetch(`/api/varianten/artikel/${artikel.id}`)
+      
+      if (!response.ok) {
+        throw new Error('Fehler beim Laden der Varianten')
+      }
+      
+      const data = await response.json()
+      setVarianten(data || [])
+    } catch (err) {
+      console.error('Fehler beim Laden der Varianten:', err)
+      showToast('Fehler beim Laden der Varianten', 'error')
+    } finally {
+      setLoadingVarianten(false)
+    }
+  }
+  
+  // Varianten laden wenn Tab gewechselt wird oder wenn hat_varianten aktiviert wurde
+  useEffect(() => {
+    if (activeTab === 'varianten' && artikel?.hat_varianten) {
+      loadVarianten()
+    }
+  }, [activeTab, artikel?.hat_varianten])
 
   const handleChange = (field, value) => {
     setFormData(prev => ({
@@ -161,7 +197,82 @@ function ArtikelDetailsModal({ artikel, onClose, onSave }) {
     return (formData?.bestand_lager || 0) + (formData?.bestand_werkstatt || 0)
   }
 
-  // Lieferanten-Management Funktionen
+  // ============================================================================
+  // VARIANTEN-MANAGEMENT
+  // ============================================================================
+  
+  const handleNeueVariante = () => {
+    setCurrentVariante(null)
+    setShowVarianteModal(true)
+  }
+  
+  const handleEditVariante = (variante) => {
+    setCurrentVariante(variante)
+    setShowVarianteModal(true)
+  }
+  
+  const handleVarianteSaved = async (savedVariante) => {
+    showToast('Variante erfolgreich gespeichert!', 'success')
+    await loadVarianten() // Liste neu laden
+  }
+  
+  const handleDeleteVariante = async (varianteId) => {
+    if (!confirm('Variante wirklich löschen? (Nur möglich wenn Bestand = 0)')) {
+      return
+    }
+    
+    try {
+      const response = await fetch(`/api/varianten/${varianteId}`, {
+        method: 'DELETE'
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Fehler beim Löschen')
+      }
+      
+      showToast('Variante gelöscht!', 'success')
+      await loadVarianten()
+    } catch (err) {
+      showToast(err.message, 'error')
+    }
+  }
+  
+  const handleToggleHatVarianten = async (value) => {
+    try {
+      const response = await fetch(`/api/artikel/${artikel.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hat_varianten: value })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Fehler beim Aktualisieren')
+      }
+      
+      // FormData & Artikel aktualisieren
+      setFormData(prev => ({ ...prev, hat_varianten: value }))
+      artikel.hat_varianten = value
+      
+      if (value) {
+        showToast('Varianten aktiviert! Wechsle zum Varianten-Tab um Varianten anzulegen.', 'success')
+        await loadVarianten()
+      } else {
+        showToast('Varianten deaktiviert', 'success')
+      }
+      
+      // Parent benachrichtigen
+      if (onSave) {
+        onSave({ ...artikel, hat_varianten: value })
+      }
+    } catch (err) {
+      showToast('Fehler: ' + err.message, 'error')
+    }
+  }
+
+  // ============================================================================
+  // LIEFERANTEN-MANAGEMENT
+  // ============================================================================
   const handleAddLieferant = async () => {
     if (!newLieferant.lieferant_id) {
       showToast('Bitte wähle einen Lieferanten aus!', 'warning')
@@ -282,6 +393,21 @@ function ArtikelDetailsModal({ artikel, onClose, onSave }) {
             >
               Basis-Daten
             </button>
+            
+            {/* Varianten-Tab (nur wenn aktiviert) */}
+            {formData?.hat_varianten && (
+              <button
+                onClick={() => setActiveTab('varianten')}
+                className={`py-3 px-4 font-medium border-b-2 transition ${
+                  activeTab === 'varianten'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Varianten ({varianten.length})
+              </button>
+            )}
+            
             <button
               onClick={() => setActiveTab('lieferanten')}
               className={`py-3 px-4 font-medium border-b-2 transition ${
@@ -492,6 +618,33 @@ function ArtikelDetailsModal({ artikel, onClose, onSave }) {
                     </div>
                   </div>
 
+                  {/* Hat Varianten Toggle */}
+                  <div className="border-t pt-6">
+                    <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <input
+                        type="checkbox"
+                        id="hat_varianten"
+                        checked={formData.hat_varianten || false}
+                        onChange={(e) => handleToggleHatVarianten(e.target.checked)}
+                        disabled={!editMode}
+                        className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <label htmlFor="hat_varianten" className="block font-medium text-gray-900">
+                          Hat Varianten
+                        </label>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Aktiviere dies, wenn der Artikel mehrere Varianten hat (z.B. verschiedene Größen, Farben, Kassetten-Codes wie KSA18/KSA40, etc.)
+                        </p>
+                        {formData.hat_varianten && (
+                          <p className="text-sm text-blue-700 mt-2 font-medium">
+                            ✓ Varianten aktiv → Wechsle zum "Varianten"-Tab um Varianten zu verwalten
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Notizen */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -508,6 +661,122 @@ function ArtikelDetailsModal({ artikel, onClose, onSave }) {
                       }`}
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Tab: Varianten */}
+              {activeTab === 'varianten' && (
+                <div className="space-y-4">
+                  {/* Header mit Button */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Varianten von {artikel.bezeichnung}
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Verwalte verschiedene Ausführungen dieses Artikels
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleNeueVariante}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                    >
+                      <span>+</span>
+                      Neue Variante
+                    </button>
+                  </div>
+
+                  {/* Varianten-Liste */}
+                  {loadingVarianten ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                      <p className="text-gray-500 mt-2">Lade Varianten...</p>
+                    </div>
+                  ) : varianten.length === 0 ? (
+                    <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                      <p className="text-gray-500 text-lg">Noch keine Varianten vorhanden</p>
+                      <p className="text-gray-400 text-sm mt-2">Klicke auf "Neue Variante" um eine anzulegen</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Artikelnummer
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Spezifikation
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Kompatibilität
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Farbe
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Bestand
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              EK
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              UVP
+                            </th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Aktionen
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {varianten.map((variante) => (
+                            <tr key={variante.id} className={variante.ist_mindestbestand ? 'bg-yellow-50' : ''}>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {variante.artikelnummer}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                                {variante.spezifikation || variante.etrto || '-'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                {variante.kompatibilitaet || '-'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                {variante.farbe || '-'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                <span className={variante.ist_mindestbestand ? 'text-yellow-700 font-semibold' : 'text-gray-900'}>
+                                  {variante.bestand_gesamt}
+                                </span>
+                                {variante.ist_mindestbestand && (
+                                  <span className="ml-2 text-xs text-yellow-600">⚠ Niedrig</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                                {formatPreis(variante.preis_ek_effektiv)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {formatPreis(variante.preis_uvp)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                <button
+                                  onClick={() => handleEditVariante(variante)}
+                                  className="text-blue-600 hover:text-blue-800"
+                                >
+                                  Bearbeiten
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteVariante(variante.id)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  Löschen
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -877,6 +1146,19 @@ function ArtikelDetailsModal({ artikel, onClose, onSave }) {
           </div>
         </div>
       </div>
+
+      {/* Variante Bearbeiten Modal */}
+      {showVarianteModal && (
+        <VarianteBearbeitenModal
+          artikelId={artikel.id}
+          variante={currentVariante}
+          onClose={() => {
+            setShowVarianteModal(false)
+            setCurrentVariante(null)
+          }}
+          onSave={handleVarianteSaved}
+        />
+      )}
 
       {/* Toast Notifications */}
       {toast && (

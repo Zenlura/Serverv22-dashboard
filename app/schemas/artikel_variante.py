@@ -17,8 +17,12 @@ class ArtikelVarianteBase(BaseModel):
     artikelnummer: str = Field(..., max_length=50, description="Lieferanten-Artikelnummer (z.B. Hartje: 0.754.432/3)")
     barcode: Optional[str] = Field(None, max_length=100, description="Barcode (EAN13, Code128, etc.) - kann leer sein")
     
-    # Spezifikation
-    etrto: Optional[str] = Field(None, max_length=20, description="ETRTO-Größe (z.B. 47-507)")
+    # Spezifikation (UNIVERSELL)
+    spezifikation: Optional[str] = Field(None, max_length=200, description="Universelle Spezifikation (z.B. KSA18, 28x1.85, M5x20mm)")
+    kompatibilitaet: Optional[str] = Field(None, max_length=200, description="Kompatibilität (z.B. Shimano 11-fach)")
+    
+    # Reifen-spezifisch (optional)
+    etrto: Optional[str] = Field(None, max_length=20, description="ETRTO-Größe (z.B. 47-507) - nur Reifen/Felgen")
     zoll_info: Optional[str] = Field(None, max_length=50, description="Zoll-Bezeichnung (z.B. 24 x 1,75)")
     farbe: Optional[str] = Field(None, max_length=50, description="Farbe (z.B. schwarz)")
     
@@ -50,6 +54,9 @@ class ArtikelVarianteUpdate(BaseModel):
     """Schema zum Updaten einer Variante (alle Felder optional)"""
     artikelnummer: Optional[str] = Field(None, max_length=50)
     barcode: Optional[str] = Field(None, max_length=100)
+    
+    spezifikation: Optional[str] = Field(None, max_length=200)
+    kompatibilitaet: Optional[str] = Field(None, max_length=200)
     
     etrto: Optional[str] = Field(None, max_length=20)
     zoll_info: Optional[str] = Field(None, max_length=50)
@@ -96,8 +103,11 @@ class ArtikelVarianteListItem(BaseModel):
     """Kompakte Varianten-Info für Listen"""
     id: int
     artikelnummer: str
+    spezifikation: Optional[str] = None
+    kompatibilitaet: Optional[str] = None
     etrto: Optional[str] = None
     zoll_info: Optional[str] = None
+    farbe: Optional[str] = None
     barcode: Optional[str] = None
     bestand_gesamt: int
     preis_ek_effektiv: float
