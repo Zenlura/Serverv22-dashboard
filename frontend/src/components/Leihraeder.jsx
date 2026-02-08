@@ -14,6 +14,7 @@ export default function Leihraeder({ showToast }) {
   const [selectedLeihrad, setSelectedLeihrad] = useState(null)
   const [selectedDate, setSelectedDate] = useState(null)
   const [editVermietung, setEditVermietung] = useState(null) // ✅ Für Timeline Edit
+  const [timelineRefreshKey, setTimelineRefreshKey] = useState(0) // ✅ Für Timeline Refresh
 
   useEffect(() => {
     loadData()
@@ -162,6 +163,7 @@ export default function Leihraeder({ showToast }) {
           onNewBuchung={handleNewBuchung}
           onEditBuchung={handleEditBuchung}
           onDetailsClick={handleDetailsClick}
+          refreshKey={timelineRefreshKey}
         />
       )}
 
@@ -201,6 +203,7 @@ export default function Leihraeder({ showToast }) {
             setSelectedDate(null)
             setEditVermietung(null)
             loadData()
+            setTimelineRefreshKey(prev => prev + 1) // ✅ Timeline neu laden
             showToast?.('Vermietung gespeichert', 'success')
           }}
         />

@@ -456,18 +456,43 @@ def check_verfuegbarkeit_pro_typ(
         # 2. Belegte Räder im Zeitraum (falls Datum angegeben)
         belegt = 0
         if von_datum and bis_datum:
-            # Hole alle Räder dieses Typs
-            raeder_ids = [lr.id for lr in db.query(Leihrad).filter(Leihrad.typ == typ).all()]
+            # ✅ FIX: Finde ALLE Vermietungen (nicht nur mit leihrad_id!)
+            # Alte Buchungen: haben leihrad_id
+            # Neue Buchungen: haben nur positionen (leihrad_id = NULL)
             
-            # Finde überlappende Vermietungen
-            overlapping = db.query(Vermietung).filter(
+            # ALTE: mit leihrad_id
+            raeder_ids = [lr.id for lr in db.query(Leihrad).filter(Leihrad.typ == typ).all()]
+            overlapping_alt = db.query(Vermietung).filter(
                 Vermietung.leihrad_id.in_(raeder_ids),
                 Vermietung.status.in_(['aktiv', 'reserviert']),
                 Vermietung.von_datum <= bis_datum,
                 Vermietung.bis_datum >= von_datum
             ).all()
             
-            belegt = sum(v.anzahl_raeder or 1 for v in overlapping)
+            # NEUE: ohne leihrad_id (typ-basiert)
+            overlapping_neu = db.query(Vermietung).options(
+                joinedload(Vermietung.positionen)
+            ).filter(
+                Vermietung.leihrad_id.is_(None),
+                Vermietung.status.in_(['aktiv', 'reserviert']),
+                Vermietung.von_datum <= bis_datum,
+                Vermietung.bis_datum >= von_datum
+            ).all()
+            
+            # Zähle alte Buchungen
+            for v in overlapping_alt:
+                if v.positionen and len(v.positionen) > 0:
+                    # Hat Positionen → Nutze die
+                    belegt += sum(p.anzahl for p in v.positionen if p.rad_typ == typ)
+                else:
+                    # Keine Positionen → Fallback
+                    belegt += v.anzahl_raeder or 1
+            
+            # Zähle neue Buchungen (typ-basiert)
+            for v in overlapping_neu:
+                if v.positionen and len(v.positionen) > 0:
+                    # Nur Positionen dieses Typs zählen
+                    belegt += sum(p.anzahl for p in v.positionen if p.rad_typ == typ)
         
         # 3. ✅ FIX: Verfügbar = Gesamt - Belegt (nicht nur status=verfuegbar!)
         verfuegbar = max(0, gesamt - belegt)
@@ -517,9 +542,10 @@ def check_verfuegbarkeit(
     Berechnet dynamisch aus ALLEN vermietbaren Rädern
     """
     
-    # ✅ FIX: Alle VERMIETBAREN Räder zählen (nicht defekt)
+    # ✅ FIX: ALLE Räder zählen (inkl. Werkstatt)
+    # "defekt" ist ein STATUS, kein TYP!
     gesamt_raeder = db.query(Leihrad).filter(
-        Leihrad.typ.notin_(['defekt'])  # Nur defekt ausschließen
+        Leihrad.typ.isnot(None)  # Nur Räder mit Typ
     ).count()
     
     # Aktive Vermietungen im Zeitraum
@@ -529,7 +555,16 @@ def check_verfuegbarkeit(
         Vermietung.bis_datum >= von_datum
     ).all()
     
-    belegt = sum(v.anzahl_raeder or 1 for v in overlapping)
+    # ✅ FIX: Positionen berücksichtigen (Timeline V6)
+    belegt = 0
+    for v in overlapping:
+        if v.positionen and len(v.positionen) > 0:
+            # Summe aller Positionen
+            belegt += sum(p.anzahl for p in v.positionen)
+        else:
+            # Fallback: anzahl_raeder verwenden
+            belegt += v.anzahl_raeder or 1
+    
     verfuegbar = max(0, gesamt_raeder - belegt)
     
     return {

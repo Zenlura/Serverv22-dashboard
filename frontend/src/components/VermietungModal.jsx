@@ -15,7 +15,10 @@ import { Bike, Plus, Minus, UserPlus, X } from 'lucide-react'
  * - Automatische Preisberechnung
  * - Neukunde direkt anlegen
  */
-function VermietungModalTyp({ onClose, onSave, vorauswahl }) {
+function VermietungModalTyp({ onClose, onSave, vorauswahl, vermietung }) {
+  // Edit-Modus?
+  const isEdit = !!vermietung
+  
   // Basis-Daten
   const [formData, setFormData] = useState({
     kunde_id: null,
@@ -78,6 +81,36 @@ function VermietungModalTyp({ onClose, onSave, vorauswahl }) {
       berechnePreis()
     }
   }, [formData.von_datum, formData.bis_datum, typPositionen])
+
+  // ✨ NEU: Bestehende Vermietungs-Daten laden (Edit-Modus)
+  useEffect(() => {
+    if (isEdit && vermietung) {
+      console.log('📝 Edit-Modus: Lade Vermietung', vermietung)
+      
+      // Formular-Daten setzen
+      setFormData({
+        kunde_id: vermietung.kunde_id,
+        von_datum: vermietung.von_datum?.split('T')[0] || vermietung.von_datum,
+        von_zeit: vermietung.von_zeit || '10:00',
+        bis_datum: vermietung.bis_datum?.split('T')[0] || vermietung.bis_datum,
+        bis_zeit: vermietung.bis_zeit || '18:00',
+        kaution: vermietung.kaution?.toString() || '0.00',
+        notizen: vermietung.notizen || ''
+      })
+      
+      // Positionen rekonstruieren
+      if (vermietung.positionen && vermietung.positionen.length > 0) {
+        const positionenObj = {}
+        vermietung.positionen.forEach(pos => {
+          positionenObj[pos.rad_typ || pos.typ] = pos.anzahl
+        })
+        setTypPositionen(positionenObj)
+      } else if (vermietung.anzahl_raeder) {
+        // Fallback: Alte Struktur (nur anzahl_raeder)
+        setTypPositionen({ 'Normal': vermietung.anzahl_raeder })
+      }
+    }
+  }, [isEdit, vermietung])
 
   const loadTypVerfuegbarkeit = async () => {
     try {
@@ -287,21 +320,28 @@ function VermietungModalTyp({ onClose, onSave, vorauswahl }) {
 
       console.log('Sende Vermietung:', vermietungData)
 
-      const response = await fetch('/api/vermietungen/', {
-        method: 'POST',
+      // ✨ Edit-Modus: PUT Request
+      const url = isEdit 
+        ? `/api/vermietungen/${vermietung.id}`
+        : '/api/vermietungen/'
+      
+      const method = isEdit ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method: method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vermietungData)
       })
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.detail || 'Fehler beim Erstellen der Vermietung')
+        throw new Error(error.detail || `Fehler beim ${isEdit ? 'Bearbeiten' : 'Erstellen'} der Vermietung`)
       }
 
-      const vermietung = await response.json()
+      const result = await response.json()
       
       if (onSave) {
-        onSave(vermietung)
+        onSave(result)
       }
       
       onClose()
@@ -323,7 +363,9 @@ function VermietungModalTyp({ onClose, onSave, vorauswahl }) {
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold">✨ Neue Vermietung</h2>
+          <h2 className="text-xl font-bold">
+            {isEdit ? '✏️ Vermietung bearbeiten' : '✨ Neue Vermietung'}
+          </h2>
           <button
             onClick={onClose}
             className="p-1 hover:bg-gray-100 rounded"
@@ -695,7 +737,7 @@ function VermietungModalTyp({ onClose, onSave, vorauswahl }) {
               disabled={loading || gesamtRaeder === 0 || !formData.kunde_id}
               className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Speichern...' : 'Vermietung erstellen'}
+              {loading ? 'Speichern...' : (isEdit ? 'Änderungen speichern' : 'Vermietung erstellen')}
             </button>
           </div>
         </form>

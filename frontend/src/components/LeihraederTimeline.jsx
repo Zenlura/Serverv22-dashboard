@@ -4,17 +4,24 @@ import { de } from 'date-fns/locale';
 import { Calendar, Plus, AlertCircle, Clock, Users, Bike, Edit2, Info, Trash2, ArrowRight, CheckCircle, Package } from 'lucide-react';
 
 /**
- * LeihraederTimeline V6 - PRAXISTAUGLICH
- * Session: 08.02.2026 13:00
+ * LeihraederTimeline V8 - MIT ACTION-BUTTONS
+ * Session: 08.02.2026 13:30
  * 
  * FIXES:
  * 1. ✅ Kompakte Darstellung - Laufende Buchungen als Badge, nicht voll
  * 2. ✅ Bearbeiten öffnet Edit-Modal (nicht Neu anlegen)
  * 3. ✅ Rückgabe-Tag zeigt Rückgabe-Card
- * 4. ✅ Rückgabe-Funktion mit Zustandserfassung
+ * 4. ✅ Rückgabe-Funktion mit Feedback
  * 5. ✅ Einzelne Räder hinzufügen/entfernen
+ * 6. ✅ AUSGABE-BUTTON: Reserviert → Aktiv
+ * 7. ✅ RÜCKNAHME-BUTTON: Aktiv → Abgeschlossen
+ * 
+ * NEU IN V8:
+ * - Ausgabe-Button für Buchungen die heute starten (status=reserviert)
+ * - Verbesserte Rückgabe mit besserem Feedback
+ * - Zeitstempel für Ausgabe/Rückgabe (ausgabe_zeit, rueckgabe_zeit)
  */
-const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => {
+const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick, refreshKey = 0 }) => {
   const [timeline, setTimeline] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -24,7 +31,7 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
 
   useEffect(() => {
     loadTimelineData();
-  }, [tageAnzahl]);
+  }, [tageAnzahl, refreshKey]); // ✅ Lädt neu bei refreshKey Änderung
 
   const loadTimelineData = async () => {
     setLoading(true);
@@ -51,10 +58,13 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
         setGesamtRaeder(verfData.gesamt || 0);
       }
 
-      // Typ-Verfügbarkeit laden
+      // Typ-Verfügbarkeit laden - ✅ MIT HEUTE-DATUM!
       let typVerfuegbarkeit = null;
       try {
-        const typResponse = await fetch('/api/vermietungen/verfuegbarkeit-pro-typ/');
+        const heuteDatum = format(heute, 'yyyy-MM-dd');
+        const typResponse = await fetch(
+          `/api/vermietungen/verfuegbarkeit-pro-typ/?von_datum=${heuteDatum}&bis_datum=${heuteDatum}`
+        );
         if (typResponse.ok) {
           typVerfuegbarkeit = await typResponse.json();
         }
@@ -94,8 +104,15 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
           }
         });
 
-        // Verfügbarkeit
-        const belegtAnzahl = buchungenLaufenAmTag.reduce((sum, v) => sum + (v.anzahl_raeder || 1), 0);
+        // Verfügbarkeit - ✅ FIX: Positionen berücksichtigen
+        let belegtAnzahl = 0;
+        buchungenLaufenAmTag.forEach(v => {
+          if (v.positionen && v.positionen.length > 0) {
+            belegtAnzahl += v.positionen.reduce((sum, p) => sum + p.anzahl, 0);
+          } else {
+            belegtAnzahl += v.anzahl_raeder || 1;
+          }
+        });
         const verfuegbar = Math.max(0, gesamtRaeder - belegtAnzahl);
 
         // Sortierung
@@ -135,13 +152,27 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
     return format(tag.datum, 'EEEE (EEE, dd. MMM yyyy)', { locale: de }).toUpperCase();
   };
 
-  const StatusBadge = ({ status }) => {
+  const StatusBadge = ({ status, onRueckgabe, isEarlyReturn }) => {
     const config = {
       reserviert: { color: 'bg-yellow-100 text-yellow-700', label: 'Reserviert' },
-      aktiv: { color: 'bg-red-100 text-red-700', label: 'Aktiv' },
+      aktiv: { color: 'bg-red-100 text-red-700 hover:bg-red-200', label: 'Aktiv' },
       abgeschlossen: { color: 'bg-green-100 text-green-700', label: 'Abgeschlossen' }
     };
     const { color, label } = config[status] || config.reserviert;
+    
+    // ✅ Aktiv-Badge als Button für frühe Rückgabe
+    if (status === 'aktiv' && onRueckgabe && isEarlyReturn) {
+      return (
+        <button
+          onClick={onRueckgabe}
+          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium cursor-pointer transition-colors ${color}`}
+          title="Klicken für vorzeitige Rückgabe"
+        >
+          {label}
+        </button>
+      );
+    }
+    
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
         {label}
@@ -221,9 +252,26 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
-            <StatusBadge status={buchung.status} />
+            <StatusBadge 
+              status={buchung.status} 
+              onRueckgabe={() => handleRueckgabe(buchung)}
+              isEarlyReturn={buchung.status === 'aktiv'}
+            />
             
             <div className="flex gap-1">
+              {/* ✅ AUSGABE-BUTTON: Nur wenn reserviert */}
+              {buchung.status === 'reserviert' && (
+                <button
+                  onClick={() => handleAusgeben(buchung)}
+                  className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1 font-medium"
+                  title="Räder ausgeben"
+                >
+                  <CheckCircle size={14} />
+                  Ausgeben
+                </button>
+              )}
+              
+              {/* Details, Edit, Löschen - immer sichtbar */}
               <button
                 onClick={() => onDetailsClick?.(buchung)}
                 className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors"
@@ -245,14 +293,6 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
               >
                 <Trash2 size={14} />
               </button>
-              {buchung.status === 'aktiv' && !buchung.rad_abgeholt && (
-                <button
-                  onClick={() => handleAbholung(buchung)}
-                  className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
-                >
-                  Abholen
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -399,6 +439,35 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
     }
   };
 
+  // ✅ NEU: Räder ausgeben (reserviert → aktiv)
+  const handleAusgeben = async (buchung) => {
+    const kundenName = getKundenName(buchung);
+    const raederAnzeige = getRadAnzeige(buchung);
+    
+    if (!confirm(`Räder jetzt ausgeben?\n\n${kundenName}\n${raederAnzeige}\nUhrzeit: ${buchung.von_zeit || '—'}`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/vermietungen/${buchung.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'aktiv',
+          ausgabe_datum: new Date().toISOString().split('T')[0],
+          ausgabe_zeit: new Date().toTimeString().split(' ')[0].substring(0, 5)
+        })
+      });
+      
+      if (!response.ok) throw new Error('Fehler beim Ausgeben');
+      
+      loadTimelineData();
+      alert(`✅ Räder ausgegeben!\n\n${kundenName}\n${raederAnzeige}`);
+    } catch (err) {
+      alert(`Fehler beim Ausgeben: ${err.message}`);
+    }
+  };
+
   const handleAbholung = async (buchung) => {
     if (!confirm(`${buchung.anzahl_raeder || 1} Räder als abgeholt markieren?`)) return;
 
@@ -420,42 +489,45 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
   };
 
   const handleRueckgabe = async (buchung) => {
-    // TODO: Rückgabe-Modal öffnen mit:
-    // - Zustandserfassung (Schäden?)
-    // - Einzelne Räder zurückgeben
-    // - Verspätung?
-    // - Kaution zurück?
+    const kundenName = getKundenName(buchung);
+    const raederAnzeige = getRadAnzeige(buchung);
     
-    if (confirm(`Rückgabe für ${getRadAnzeige(buchung)} durchführen?`)) {
-      try {
-        const response = await fetch(`/api/vermietungen/${buchung.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: 'abgeschlossen',
-            rueckgabe_datum: new Date().toISOString().split('T')[0]
-          })
-        });
-        if (!response.ok) throw new Error('Fehler bei Rückgabe');
-        loadTimelineData();
-      } catch (err) {
-        alert(`Fehler: ${err.message}`);
-      }
+    if (!confirm(`Rückgabe durchführen?\n\n${kundenName}\n${raederAnzeige}\nRückgabe bis: ${buchung.bis_zeit || '18:00'}`)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/vermietungen/${buchung.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'abgeschlossen',
+          rueckgabe_datum: new Date().toISOString().split('T')[0],
+          rueckgabe_zeit: new Date().toTimeString().split(' ')[0].substring(0, 5)
+        })
+      });
+      
+      if (!response.ok) throw new Error('Fehler bei Rückgabe');
+      
+      loadTimelineData();
+      alert(`✅ Rückgabe erfolgreich!\n\n${kundenName}\n${raederAnzeige}`);
+    } catch (err) {
+      alert(`Fehler bei Rückgabe: ${err.message}`);
     }
   };
 
   const calculateStats = () => {
     if (timeline.length === 0) return {
-      durchschnittVerfuegbar: 0,
-      durchschnittBelegt: 0,
+      heuteVerfuegbar: 0,
+      heuteBelegt: 0,
       gesamt: gesamtRaeder,
       maxBelegt: 0,
       tageVollBelegt: 0,
       tageStarkBelegt: 0
     };
 
-    const totalVerfuegbar = timeline.reduce((sum, tag) => sum + tag.verfuegbar, 0);
-    const totalBelegt = timeline.reduce((sum, tag) => sum + tag.belegt, 0);
+    // ✅ HEUTE statt Durchschnitt!
+    const heute = timeline[0]; // Erster Tag = Heute
     const maxBelegt = Math.max(...timeline.map(tag => tag.belegt));
     const tageVollBelegt = timeline.filter(tag => tag.verfuegbar === 0).length;
     const tageStarkBelegt = timeline.filter(tag => {
@@ -464,8 +536,8 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
     }).length;
 
     return {
-      durchschnittVerfuegbar: Math.round(totalVerfuegbar / timeline.length),
-      durchschnittBelegt: Math.round(totalBelegt / timeline.length),
+      heuteVerfuegbar: heute.verfuegbar,
+      heuteBelegt: heute.belegt,
       gesamt: gesamtRaeder,
       maxBelegt,
       tageVollBelegt,
@@ -512,34 +584,17 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
           </div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div className="bg-white rounded p-3 border border-blue-100">
-            <div className="text-xs text-gray-600 mb-1">Ø Verfügbar</div>
+            <div className="text-xs text-gray-600 mb-1">📅 Heute verfügbar</div>
             <div className="text-2xl font-bold text-green-600">
-              {stats.durchschnittVerfuegbar}/{stats.gesamt}
+              {stats.heuteVerfuegbar}/{stats.gesamt}
             </div>
           </div>
           <div className="bg-white rounded p-3 border border-blue-100">
-            <div className="text-xs text-gray-600 mb-1">Ø Belegt</div>
+            <div className="text-xs text-gray-600 mb-1">🚲 Heute belegt</div>
             <div className="text-2xl font-bold text-orange-600">
-              {stats.durchschnittBelegt}
-            </div>
-          </div>
-          <div className="bg-white rounded p-3 border border-blue-100">
-            <div className="text-xs text-gray-600 mb-1">Max. belegt</div>
-            <div className="text-2xl font-bold text-red-600">
-              {stats.maxBelegt}
-            </div>
-          </div>
-          <div className="bg-white rounded p-3 border border-blue-100">
-            <div className="text-xs text-gray-600 mb-1">Kritische Tage</div>
-            <div className="text-2xl font-bold text-yellow-600">
-              {stats.tageVollBelegt + stats.tageStarkBelegt}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">
-              {stats.tageVollBelegt > 0 && `${stats.tageVollBelegt}× voll`}
-              {stats.tageVollBelegt > 0 && stats.tageStarkBelegt > 0 && ', '}
-              {stats.tageStarkBelegt > 0 && `${stats.tageStarkBelegt}× knapp`}
+              {stats.heuteBelegt}
             </div>
           </div>
         </div>
