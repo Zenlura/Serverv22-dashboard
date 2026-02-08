@@ -5,6 +5,7 @@ Exportiert alle SQLAlchemy Models
 from .kategorie import Kategorie
 from .lieferant import Lieferant
 from .artikel import Artikel
+from .artikel_variante import ArtikelVariante
 from .artikel_lieferant import ArtikelLieferant
 from .bestand_historie import BestandHistorie, BestandArt, BestandOrt
 from .bestellung import Bestellung, BestellPosition
@@ -18,6 +19,7 @@ __all__ = [
     "Kategorie",
     "Lieferant",
     "Artikel",
+    "ArtikelVariante",
     "ArtikelLieferant",
     "BestandHistorie",
     "BestandArt",

@@ -7,6 +7,23 @@ from datetime import datetime
 from decimal import Decimal
 
 
+# Forward reference für ArtikelVariante
+class ArtikelVarianteListItem(BaseModel):
+    """Kompakte Varianten-Info für Listen"""
+    id: int
+    artikelnummer: str
+    etrto: Optional[str] = None
+    zoll_info: Optional[str] = None
+    barcode: Optional[str] = None
+    bestand_gesamt: int
+    preis_ek_effektiv: float
+    preis_uvp: Decimal
+    ist_mindestbestand: bool
+    
+    class Config:
+        from_attributes = True
+
+
 # ═══════════════════════════════════════════════════════════
 # LIEFERANT SCHEMAS (für Nested Response)
 # ═══════════════════════════════════════════════════════════
@@ -57,12 +74,15 @@ class ArtikelBase(BaseModel):
     typ: str = Field(default="material", pattern="^(material|dienstleistung|werkzeug|sonstiges)$")
     kategorie_id: Optional[int] = None
     
-    # Bestand
+    # Varianten-Support
+    hat_varianten: bool = Field(default=False, description="Hat dieser Artikel Varianten?")
+    
+    # Bestand (nur wenn KEINE Varianten!)
     bestand_lager: int = Field(default=0, ge=0)
     bestand_werkstatt: int = Field(default=0, ge=0)
     mindestbestand: int = Field(default=0, ge=0)
     
-    # Preise
+    # Preise (nur wenn KEINE Varianten!)
     einkaufspreis: Optional[Decimal] = Field(default=None, ge=0)
     verkaufspreis: Optional[Decimal] = Field(default=None, ge=0)
     
@@ -83,6 +103,8 @@ class ArtikelUpdate(BaseModel):
     typ: Optional[str] = Field(None, pattern="^(material|dienstleistung|werkzeug|sonstiges)$")
     kategorie_id: Optional[int] = None
     
+    hat_varianten: Optional[bool] = None
+    
     bestand_lager: Optional[int] = Field(None, ge=0)
     bestand_werkstatt: Optional[int] = Field(None, ge=0)
     mindestbestand: Optional[int] = Field(None, ge=0)
@@ -102,6 +124,7 @@ class ArtikelResponse(ArtikelBase):
     kategorie: Optional[KategorieBase] = None
     lieferanten: List[ArtikelLieferantInfo] = []
     hauptlieferant: Optional[LieferantBase] = None  # Der bevorzugte Lieferant
+    varianten: List[ArtikelVarianteListItem] = []  # Varianten (falls hat_varianten=True)
     
     # Timestamps
     created_at: datetime

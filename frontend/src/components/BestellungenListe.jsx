@@ -163,15 +163,13 @@ const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangCl
 
           {/* Actions */}
           <div className="flex items-center gap-1">
-            {bestellung.status !== 'offen' && (
-              <button
-                onClick={() => handleDownloadPDF(bestellung.id, bestellung.bestellnummer)}
-                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-                title="PDF herunterladen"
-              >
-                <Download size={16} />
-              </button>
-            )}
+            <button
+              onClick={() => handleDownloadPDF(bestellung.id, bestellung.bestellnummer)}
+              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+              title="PDF herunterladen"
+            >
+              <Download size={16} />
+            </button>
             
             {(bestellung.status === 'bestellt' || bestellung.status === 'teilweise_geliefert') && (
               <button

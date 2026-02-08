@@ -41,7 +41,10 @@ class Artikel(Base):
     bestand_werkstatt = Column(Integer, default=0, nullable=False)
     mindestbestand = Column(Integer, default=0)
     
-    # Preise
+    # Varianten-Support (NEU!)
+    hat_varianten = Column(Boolean, default=False, nullable=False)  # Hat dieser Artikel Varianten?
+    
+    # Preise (nur wenn KEINE Varianten!)
     einkaufspreis = Column(Numeric(10, 2))
     verkaufspreis = Column(Numeric(10, 2))
     
@@ -65,6 +68,7 @@ class Artikel(Base):
     kategorie = relationship("Kategorie", back_populates="artikel")
     artikel_lieferanten = relationship("ArtikelLieferant", back_populates="artikel", cascade="all, delete-orphan")
     bestand_historie = relationship("BestandHistorie", back_populates="artikel", cascade="all, delete-orphan")
+    varianten = relationship("ArtikelVariante", back_populates="artikel", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Artikel {self.artikelnummer} - {self.bezeichnung}>"
