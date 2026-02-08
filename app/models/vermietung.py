@@ -86,3 +86,4 @@ class Vermietung(Base):
     # Beziehungen
     leihrad = relationship("Leihrad", back_populates="vermietungen")
     kunde = relationship("Kunde", back_populates="vermietungen")  # NEU
+    positionen = relationship("VermietungPosition", back_populates="vermietung", cascade="all, delete-orphan")  # ✨ Phase 5

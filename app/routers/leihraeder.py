@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from typing import Optional
 from datetime import date, datetime
 
@@ -375,3 +376,93 @@ def check_verfuegbarkeit(
         "kann_buchen": verfuegbar > 0,
         "warnung": f"Nur noch {verfuegbar} Räder verfügbar" if verfuegbar < 5 else None
     }
+
+
+# ========== ✨ NEU: VERFÜGBARKEIT PRO TYP ==========
+
+@router_vermietung.get("/verfuegbarkeit-pro-typ/")
+def check_verfuegbarkeit_pro_typ(
+    von_datum: Optional[date] = None,
+    bis_datum: Optional[date] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    ✨ PHASE 2: Verfügbarkeit pro Rad-Typ
+    
+    Gibt für jeden Rad-Typ zurück:
+    - Anzahl verfügbar
+    - Anzahl gesamt
+    - Anzahl belegt (im Zeitraum, falls angegeben)
+    - Preisstaffel
+    - Ob vermietbar
+    
+    Args:
+        von_datum: Optional - Start des Zeitraums für Verfügbarkeits-Check
+        bis_datum: Optional - Ende des Zeitraums für Verfügbarkeits-Check
+    
+    Returns:
+        Dict mit Rad-Typen als Keys und Verfügbarkeits-Infos als Values
+    """
+    
+    # 1. Alle vermietbaren Rad-Typen mit Preisen ermitteln
+    # Gruppiere nach Typ und hole einen repräsentativen Preis
+    typen_query = db.query(
+        Leihrad.typ,
+        func.count(Leihrad.id).label('gesamt'),
+        func.min(Leihrad.preis_1tag).label('preis_1tag'),
+        func.min(Leihrad.preis_3tage).label('preis_3tage'),
+        func.min(Leihrad.preis_5tage).label('preis_5tage')
+    ).filter(
+        Leihrad.typ.isnot(None)  # Nur Räder mit Typ
+    ).group_by(Leihrad.typ).all()
+    
+    result = {}
+    
+    for typ_row in typen_query:
+        typ = typ_row.typ
+        gesamt = typ_row.gesamt
+        
+        # 2. Verfügbare Räder dieses Typs (Status = verfuegbar)
+        verfuegbar_query = db.query(Leihrad).filter(
+            Leihrad.typ == typ,
+            Leihrad.status == LeihradStatus.verfuegbar
+        )
+        verfuegbar_count = verfuegbar_query.count()
+        
+        # 3. Belegte Räder im Zeitraum (falls Datum angegeben)
+        belegt = 0
+        if von_datum and bis_datum:
+            # Finde alle Vermietungen dieses Typs im Zeitraum
+            # (Wir müssen hier über leihrad_id gehen, da Vermietung keinen direkten typ hat)
+            leihrad_ids = [lr.id for lr in verfuegbar_query.all()]
+            
+            overlapping = db.query(Vermietung).filter(
+                Vermietung.leihrad_id.in_(leihrad_ids),
+                Vermietung.status.in_(['aktiv', 'reserviert']),
+                Vermietung.von_datum <= bis_datum,
+                Vermietung.bis_datum >= von_datum
+            ).all()
+            
+            belegt = len(overlapping)
+        
+        # 4. Prüfe ob Typ vermietbar ist (Werkstatt = nicht vermietbar)
+        vermietbar = typ.lower() not in ['werkstatt', 'defekt']
+        
+        # 5. Erstelle Response
+        typ_info = {
+            "verfuegbar": verfuegbar_count,
+            "gesamt": gesamt,
+            "belegt": belegt,
+            "preis_1tag": float(typ_row.preis_1tag or 0),
+            "preis_3tage": float(typ_row.preis_3tage or 0),
+            "preis_5tage": float(typ_row.preis_5tage or 0),
+            "vermietbar": vermietbar
+        }
+        
+        # 6. Spezielle Behandlung für Georg (Lastenrad)
+        if typ.lower() == 'lastenrad':
+            typ_info["special"] = "GRATIS - Georg! 🎉"
+        
+        result[typ] = typ_info
+    
+    return result

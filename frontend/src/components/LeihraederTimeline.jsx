@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { format, addDays, isSameDay, isToday, isTomorrow, parseISO } from 'date-fns';
+import { format, addDays, isSameDay, isToday, isTomorrow, parseISO, isWithinInterval, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Calendar, Plus, AlertCircle, CheckCircle, Clock, Users, Bike, Edit2, Info, Trash2 } from 'lucide-react';
 
 /**
- * LeihraederTimeline V3 - KOMPAKT + FIXES
+ * LeihraederTimeline V4 - TYP-INFO PRO TAG
  * - Buchungen nur am Start-Tag (nicht wiederholt)
  * - Löschen-Button
  * - Bessere Verfügbarkeits-Berechnung
+ * - ✨ Typ-Verfügbarkeit bei JEDEM Tag (E-Bike: 12/15, Normal: 4/4, etc.)
  */
 const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => {
   const [timeline, setTimeline] = useState([]);
@@ -45,6 +46,17 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
         setGesamtRaeder(verfData.gesamt || 21);  // ✅ Default 21 statt 15
       }
 
+      // ✨ NEU: Lade Typ-Verfügbarkeit einmalig
+      let typVerfuegbarkeit = null;
+      try {
+        const typResponse = await fetch('/api/vermietungen/verfuegbarkeit-pro-typ/');
+        if (typResponse.ok) {
+          typVerfuegbarkeit = await typResponse.json();
+        }
+      } catch (err) {
+        console.error('Typ-Verfügbarkeit konnte nicht geladen werden:', err);
+      }
+
       const timelineData = [];
       // heute bereits oben deklariert
 
@@ -54,9 +66,10 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
 
         // 🔥 FIX: Buchungen die an diesem Tag LAUFEN (für Verfügbarkeit)
         const buchungenLaufenAmTag = aktiveBuchungen.filter(v => {
-          const von = parseISO(v.von_datum);
-          const bis = parseISO(v.bis_datum);
-          return tag >= von && tag <= bis;
+          const von = startOfDay(parseISO(v.von_datum));
+          const bis = startOfDay(parseISO(v.bis_datum));
+          const tagStart = startOfDay(tag);
+          return isWithinInterval(tagStart, { start: von, end: bis });
         });
 
         // 🔥 FIX: Buchungen die an diesem Tag STARTEN (für Anzeige - nur einmal!)
@@ -83,6 +96,7 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
           belegt: belegtAnzahl,
           gesamt: gesamtRaeder,
           buchungen: sortedBuchungen, // 🔥 Nur Buchungen die HIER STARTEN
+          typVerfuegbarkeit,  // ✨ NEU: Typ-Info für jeden Tag
           isToday: isToday(tag),
           isTomorrow: isTomorrow(tag)
         });
@@ -264,6 +278,9 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
     const stats = getUebersicht();
     if (!stats) return null;
 
+    // ✨ PHASE 3: Typ-Verfügbarkeit aus dem ersten Tag holen
+    const typVerfuegbarkeit = timeline[0]?.typVerfuegbarkeit;
+
     return (
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
@@ -271,6 +288,37 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
           <h3 className="font-bold text-gray-900">Übersicht {tageAnzahl} Tage</h3>
         </div>
         
+        {/* ✨ PHASE 3: Typ-Verfügbarkeit Anzeige */}
+        {typVerfuegbarkeit && Object.keys(typVerfuegbarkeit).length > 0 && (
+          <div className="mb-4 space-y-2">
+            {Object.entries(typVerfuegbarkeit)
+              .filter(([typ, info]) => info.vermietbar !== false)
+              .map(([typ, info]) => {
+                const prozent = info.gesamt > 0 ? (info.verfuegbar / info.gesamt) * 100 : 0;
+                let badgeColor = 'bg-green-100 text-green-800 border-green-200';
+                if (prozent < 30) badgeColor = 'bg-red-100 text-red-800 border-red-200';
+                else if (prozent < 60) badgeColor = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+
+                return (
+                  <div key={typ} className="flex items-center justify-between text-sm bg-white rounded px-3 py-2 border border-blue-100">
+                    <div className="flex items-center gap-2">
+                      <Bike size={14} className="text-gray-600" />
+                      <span className="font-medium text-gray-900">{typ}</span>
+                      {info.special && <span className="text-xs">🎉</span>}
+                      <span className="text-xs text-gray-500">
+                        ({info.preis_1tag > 0 ? `${info.preis_1tag.toFixed(0)}€/Tag` : 'GRATIS'})
+                      </span>
+                    </div>
+                    <div className={`px-2 py-1 rounded border text-xs font-medium ${badgeColor}`}>
+                      {info.verfuegbar}/{info.gesamt} verfügbar
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+
+        {/* Gesamt-Statistik */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white rounded p-3 border border-blue-100">
             <div className="text-xs text-gray-600 mb-1">Ø Verfügbar</div>
@@ -419,15 +467,41 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
       <div className="space-y-3">
         {timeline.map((tag) => (
           <div key={tag.datumKey} className="bg-gray-50 rounded-lg border border-gray-200">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200">
-              <h3 className={`text-sm font-bold ${tag.isToday ? 'text-blue-600' : 'text-gray-700'}`}>
-                {formatTagHeader(tag)}
-              </h3>
-              <VerfuegbarkeitsBadge 
-                verfuegbar={tag.verfuegbar} 
-                gesamt={tag.gesamt} 
-                belegt={tag.belegt} 
-              />
+            {/* ✨ ERWEITERT: Tag-Header mit Typ-Info */}
+            <div className="px-4 py-2 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-1.5">
+                <h3 className={`text-sm font-bold ${tag.isToday ? 'text-blue-600' : 'text-gray-700'}`}>
+                  {formatTagHeader(tag)}
+                </h3>
+                <VerfuegbarkeitsBadge 
+                  verfuegbar={tag.verfuegbar} 
+                  gesamt={tag.gesamt} 
+                  belegt={tag.belegt} 
+                />
+              </div>
+              
+              {/* ✨ NEU: Typ-Verfügbarkeit pro Tag */}
+              {tag.typVerfuegbarkeit && (
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  {Object.entries(tag.typVerfuegbarkeit).map(([typ, info]) => {
+                    if (!info.vermietbar) return null;
+                    
+                    const prozent = info.gesamt > 0 ? (info.verfuegbar / info.gesamt) * 100 : 0;
+                    let colorClass = 'text-green-600 bg-green-50';
+                    if (prozent < 30) colorClass = 'text-red-600 bg-red-50';
+                    else if (prozent < 60) colorClass = 'text-yellow-600 bg-yellow-50';
+                    
+                    return (
+                      <span key={typ} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded ${colorClass}`}>
+                        <Bike size={11} />
+                        <span className="font-medium">{typ}:</span>
+                        <span>{info.verfuegbar}/{info.gesamt}</span>
+                        {info.special && <span>🎉</span>}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="p-3">
