@@ -6,6 +6,7 @@ function ArtikelDetailsModal({ artikel, onClose, onSave }) {
   const [formData, setFormData] = useState(null)
   const [kategorien, setKategorien] = useState([])
   const [lieferanten, setLieferanten] = useState([])
+  const [lagerorte, setLagerorte] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -40,20 +41,23 @@ function ArtikelDetailsModal({ artikel, onClose, onSave }) {
       setLoading(true)
       
       // Kategorien und Lieferanten laden
-      const [katResponse, liefResponse] = await Promise.all([
+      const [katResponse, liefResponse, lagerResponse] = await Promise.all([
         fetch('/api/kategorien'),
-        fetch('/api/lieferanten')
+        fetch('/api/lieferanten'),
+        fetch('/api/lagerorte/?nur_aktive=true')
       ])
 
-      if (!katResponse.ok || !liefResponse.ok) {
+      if (!katResponse.ok || !liefResponse.ok || !lagerResponse.ok) {
         throw new Error('Fehler beim Laden der Daten')
       }
 
       const katData = await katResponse.json()
       const liefData = await liefResponse.json()
+      const lagerData = await lagerResponse.json()
 
       setKategorien(katData.items || katData || [])
       setLieferanten(liefData.items || liefData || [])
+      setLagerorte(lagerData || [])
       
       // Form-Daten initialisieren
       setFormData({
@@ -93,7 +97,7 @@ function ArtikelDetailsModal({ artikel, onClose, onSave }) {
         'einkaufspreis',
         'verkaufspreis',
         'einheit',
-        'lagerort',
+        'lagerort_id',
         'aktiv',
         'notizen'
       ]
@@ -470,16 +474,21 @@ function ArtikelDetailsModal({ artikel, onClose, onSave }) {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Lagerort
                       </label>
-                      <input
-                        type="text"
-                        value={formData.lagerort || ''}
-                        onChange={(e) => handleChange('lagerort', e.target.value)}
+                      <select
+                        value={formData.lagerort_id || ''}
+                        onChange={(e) => handleChange('lagerort_id', e.target.value ? parseInt(e.target.value) : null)}
                         disabled={!editMode}
-                        placeholder="Regal A3, Schrank 2, ..."
                         className={`w-full px-4 py-2 border border-gray-300 rounded-lg ${
                           editMode ? 'bg-white focus:ring-2 focus:ring-blue-500' : 'bg-gray-50'
                         }`}
-                      />
+                      >
+                        <option value="">Kein Lagerort</option>
+                        {lagerorte.map(l => (
+                          <option key={l.id} value={l.id}>
+                            {l.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 

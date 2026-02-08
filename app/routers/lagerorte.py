@@ -1,34 +1,34 @@
 """
-Lagerorte Router
-FastAPI Endpoints für Lagerverwaltung
+FastAPI Router für Lagerort-Verwaltung
+Endpoints: /api/lagerorte
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 
-from app.database import get_db
-from app.models.lagerort import Lagerort
-from app.schemas.lagerort import (
-    LagerortCreate,
-    LagerortUpdate,
-    LagerortResponse,
-    LagerortListItem
-)
-
-router = APIRouter(
-    prefix="/api/lagerorte",
-    tags=["Lagerorte"]
-)
+from ..database import get_db
+from ..models.lagerort import Lagerort
+from ..models.artikel import Artikel
+from ..schemas import lagerort as schemas
 
 
-@router.get("/", response_model=List[LagerortListItem])
+router = APIRouter(prefix="/api/lagerorte", tags=["Lagerorte"])
+
+
+# ═══════════════════════════════════════════════════════════
+# GET /api/lagerorte - Liste aller Lagerorte
+# ═══════════════════════════════════════════════════════════
+
+@router.get("", response_model=List[schemas.LagerortResponse])
 def get_lagerorte(
-    nur_aktive: bool = True,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    nur_aktive: bool = Query(True, description="Nur aktive Lagerorte anzeigen")
 ):
     """
-    Liste aller Lagerorte
-    Sortiert nach sortierung-Feld
+    Gibt Liste aller Lagerorte zurück
+    - Sortiert nach sortierung ASC
+    - Optional: nur aktive
     """
     query = db.query(Lagerort)
     
@@ -36,35 +36,42 @@ def get_lagerorte(
         query = query.filter(Lagerort.aktiv == True)
     
     lagerorte = query.order_by(Lagerort.sortierung, Lagerort.name).all()
+    
     return lagerorte
 
 
-@router.get("/{lagerort_id}", response_model=LagerortResponse)
+# ═══════════════════════════════════════════════════════════
+# GET /api/lagerorte/{id} - Einzelner Lagerort
+# ═══════════════════════════════════════════════════════════
+
+@router.get("/{lagerort_id}", response_model=schemas.LagerortResponse)
 def get_lagerort(lagerort_id: int, db: Session = Depends(get_db)):
-    """Einzelner Lagerort"""
+    """Gibt einzelnen Lagerort zurück"""
     lagerort = db.query(Lagerort).filter(Lagerort.id == lagerort_id).first()
     
     if not lagerort:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lagerort {lagerort_id} nicht gefunden"
-        )
+        raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
     
     return lagerort
 
 
-@router.post("/", response_model=LagerortResponse, status_code=status.HTTP_201_CREATED)
-def create_lagerort(lagerort_data: LagerortCreate, db: Session = Depends(get_db)):
-    """Neuen Lagerort erstellen"""
+# ═══════════════════════════════════════════════════════════
+# POST /api/lagerorte - Neuen Lagerort anlegen
+# ═══════════════════════════════════════════════════════════
+
+@router.post("", response_model=schemas.LagerortResponse, status_code=201)
+def create_lagerort(lagerort_data: schemas.LagerortCreate, db: Session = Depends(get_db)):
+    """Legt neuen Lagerort an"""
     
-    # Prüfen ob Name schon existiert
+    # Prüfe ob Name schon existiert
     existing = db.query(Lagerort).filter(Lagerort.name == lagerort_data.name).first()
     if existing:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400, 
             detail=f"Lagerort '{lagerort_data.name}' existiert bereits"
         )
     
+    # Lagerort erstellen
     lagerort = Lagerort(**lagerort_data.model_dump())
     db.add(lagerort)
     db.commit()
@@ -73,32 +80,37 @@ def create_lagerort(lagerort_data: LagerortCreate, db: Session = Depends(get_db)
     return lagerort
 
 
-@router.patch("/{lagerort_id}", response_model=LagerortResponse)
+# ═══════════════════════════════════════════════════════════
+# PATCH /api/lagerorte/{id} - Lagerort bearbeiten
+# ═══════════════════════════════════════════════════════════
+
+@router.patch("/{lagerort_id}", response_model=schemas.LagerortResponse)
 def update_lagerort(
     lagerort_id: int,
-    lagerort_data: LagerortUpdate,
+    lagerort_data: schemas.LagerortUpdate,
     db: Session = Depends(get_db)
 ):
-    """Lagerort aktualisieren"""
+    """Bearbeitet Lagerort (nur gesetzte Felder)"""
     lagerort = db.query(Lagerort).filter(Lagerort.id == lagerort_id).first()
-    
     if not lagerort:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lagerort {lagerort_id} nicht gefunden"
-        )
+        raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
     
-    # Prüfen ob neuer Name schon existiert
-    if lagerort_data.name and lagerort_data.name != lagerort.name:
-        existing = db.query(Lagerort).filter(Lagerort.name == lagerort_data.name).first()
+    # Update nur gesetzte Felder
+    update_data = lagerort_data.model_dump(exclude_unset=True)
+    
+    # Prüfe Name-Duplikat (falls geändert)
+    if "name" in update_data and update_data["name"] != lagerort.name:
+        existing = db.query(Lagerort).filter(
+            Lagerort.name == update_data["name"],
+            Lagerort.id != lagerort_id
+        ).first()
         if existing:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Lagerort '{lagerort_data.name}' existiert bereits"
+                status_code=400, 
+                detail=f"Lagerort '{update_data['name']}' existiert bereits"
             )
     
-    # Update
-    update_data = lagerort_data.model_dump(exclude_unset=True)
+    # Update durchführen
     for field, value in update_data.items():
         setattr(lagerort, field, value)
     
@@ -108,30 +120,69 @@ def update_lagerort(
     return lagerort
 
 
-@router.delete("/{lagerort_id}", status_code=status.HTTP_204_NO_CONTENT)
+# ═══════════════════════════════════════════════════════════
+# DELETE /api/lagerorte/{id} - Lagerort löschen
+# ═══════════════════════════════════════════════════════════
+
+@router.delete("/{lagerort_id}", status_code=204)
 def delete_lagerort(lagerort_id: int, db: Session = Depends(get_db)):
     """
-    Lagerort löschen
-    
-    ACHTUNG: Nur möglich wenn keine Artikel diesem Lagerort zugeordnet sind!
+    Löscht Lagerort
+    - Nur möglich wenn keine Artikel zugeordnet sind
     """
     lagerort = db.query(Lagerort).filter(Lagerort.id == lagerort_id).first()
-    
     if not lagerort:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lagerort {lagerort_id} nicht gefunden"
-        )
+        raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
     
-    # Prüfen ob Artikel zugeordnet sind
-    from app.models.artikel import Artikel
-    artikel_count = db.query(Artikel).filter(Artikel.lagerort_id == lagerort_id).count()
+    # Prüfe ob Artikel zugeordnet sind
+    artikel_count = db.query(func.count(Artikel.id)).filter(
+        Artikel.lagerort_id == lagerort_id
+    ).scalar()
     
     if artikel_count > 0:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Lagerort kann nicht gelöscht werden: {artikel_count} Artikel sind diesem Lagerort zugeordnet"
+            status_code=400,
+            detail=f"Lagerort kann nicht gelöscht werden: {artikel_count} Artikel sind noch zugeordnet"
         )
     
     db.delete(lagerort)
     db.commit()
+    
+    return None
+
+
+# ═══════════════════════════════════════════════════════════
+# GET /api/lagerorte/{id}/artikel - Artikel an diesem Lagerort
+# ═══════════════════════════════════════════════════════════
+
+@router.get("/{lagerort_id}/artikel")
+def get_artikel_an_lagerort(
+    lagerort_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Gibt alle Artikel zurück die an diesem Lagerort liegen
+    - Nützlich für Inventur, Übersicht, etc.
+    """
+    lagerort = db.query(Lagerort).filter(Lagerort.id == lagerort_id).first()
+    if not lagerort:
+        raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
+    
+    artikel = db.query(Artikel).filter(
+        Artikel.lagerort_id == lagerort_id,
+        Artikel.aktiv == True
+    ).all()
+    
+    return {
+        "lagerort": lagerort,
+        "artikel_anzahl": len(artikel),
+        "artikel": [
+            {
+                "id": a.id,
+                "artikelnummer": a.artikelnummer,
+                "bezeichnung": a.bezeichnung,
+                "bestand_gesamt": a.bestand_gesamt
+            }
+            for a in artikel
+        ]
+    }

@@ -45,7 +45,7 @@ class ArtikelVariante(Base):
     
     # Relationships
     artikel = relationship("Artikel", back_populates="varianten")
-    # lagerort = relationship("Lagerort", back_populates="varianten")  # Später
+    lagerort_obj = relationship("Lagerort", back_populates="artikel_varianten")  # AKTIVIERT!
     
     def __repr__(self):
         etrto_str = f" ({self.etrto})" if self.etrto else ""

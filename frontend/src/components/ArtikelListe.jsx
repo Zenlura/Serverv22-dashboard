@@ -413,6 +413,9 @@ function ArtikelListe() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Hauptlieferant
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Lagerort
+                </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Aktionen
                 </th>
@@ -421,7 +424,7 @@ function ArtikelListe() {
             <tbody className="bg-white divide-y divide-gray-200">
               {artikel.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan="9" className="px-6 py-8 text-center text-gray-500">
                     {debouncedSearchTerm ? (
                       <>Keine Artikel gefunden für "{debouncedSearchTerm}"</>
                     ) : (
@@ -483,6 +486,9 @@ function ArtikelListe() {
                           ? art.lieferanten.find(l => l.bevorzugt)?.lieferant?.name || art.lieferanten[0]?.lieferant?.name || '-'
                           : '-'
                         }
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {art.lagerort_obj?.name || '-'}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">

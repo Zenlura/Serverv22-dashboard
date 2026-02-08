@@ -1,19 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, Edit2, Trash2, Archive } from 'lucide-react';
+import { Archive, Plus, Edit2, Trash2, Save, X, ArrowUp, ArrowDown } from 'lucide-react';
 
-/**
- * Lagerorte-Verwaltung
- * 
- * Verwaltet Lagerorte wie:
- * - Keller
- * - Schränke im Käfig  
- * - Werkstatt/Büro
- */
 const LagerorteVerwaltung = () => {
   const [lagerorte, setLagerorte] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [editingLagerort, setEditingLagerort] = useState(null);
+  const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     beschreibung: '',
@@ -21,6 +13,7 @@ const LagerorteVerwaltung = () => {
     aktiv: true
   });
 
+  // Lagerorte laden
   useEffect(() => {
     loadLagerorte();
   }, []);
@@ -28,27 +21,50 @@ const LagerorteVerwaltung = () => {
   const loadLagerorte = async () => {
     try {
       const response = await fetch('/api/lagerorte/?nur_aktive=false');
-      if (response.ok) {
-        const data = await response.json();
-        setLagerorte(data);
-      }
-    } catch (err) {
-      console.error('Fehler beim Laden:', err);
+      const data = await response.json();
+      setLagerorte(data);
+    } catch (error) {
+      console.error('Fehler beim Laden:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e) => {
+  // Neuer Lagerort / Bearbeiten Modal öffnen
+  const openModal = (lagerort = null) => {
+    if (lagerort) {
+      setEditingId(lagerort.id);
+      setFormData({
+        name: lagerort.name,
+        beschreibung: lagerort.beschreibung || '',
+        sortierung: lagerort.sortierung,
+        aktiv: lagerort.aktiv
+      });
+    } else {
+      setEditingId(null);
+      setFormData({
+        name: '',
+        beschreibung: '',
+        sortierung: 0,
+        aktiv: true
+      });
+    }
+    setShowModal(true);
+  };
+
+  // Speichern (Erstellen oder Updaten)
+  const handleSave = async (e) => {
     e.preventDefault();
     
     try {
-      const url = editingLagerort 
-        ? `/api/lagerorte/${editingLagerort.id}`
+      const url = editingId 
+        ? `/api/lagerorte/${editingId}`
         : '/api/lagerorte/';
       
+      const method = editingId ? 'PATCH' : 'POST';
+      
       const response = await fetch(url, {
-        method: editingLagerort ? 'PATCH' : 'POST',
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
@@ -58,16 +74,16 @@ const LagerorteVerwaltung = () => {
         throw new Error(error.detail || 'Fehler beim Speichern');
       }
 
-      loadLagerorte();
-      handleCloseModal();
-      alert(editingLagerort ? 'Lagerort aktualisiert!' : 'Lagerort erstellt!');
-    } catch (err) {
-      alert(`Fehler: ${err.message}`);
+      await loadLagerorte();
+      setShowModal(false);
+    } catch (error) {
+      alert('Fehler: ' + error.message);
     }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!confirm(`Lagerort "${name}" wirklich löschen?\n\nNur möglich wenn keine Artikel zugeordnet sind.`)) {
+  // Löschen
+  const handleDelete = async (id) => {
+    if (!confirm('Lagerort wirklich löschen? Geht nur wenn keine Artikel zugeordnet sind.')) {
       return;
     }
 
@@ -81,199 +97,242 @@ const LagerorteVerwaltung = () => {
         throw new Error(error.detail || 'Fehler beim Löschen');
       }
 
-      loadLagerorte();
-      alert('Lagerort gelöscht!');
-    } catch (err) {
-      alert(`Fehler: ${err.message}`);
+      await loadLagerorte();
+    } catch (error) {
+      alert('Fehler: ' + error.message);
     }
   };
 
-  const handleOpenModal = (lagerort = null) => {
-    if (lagerort) {
-      setEditingLagerort(lagerort);
-      setFormData({
-        name: lagerort.name,
-        beschreibung: lagerort.beschreibung || '',
-        sortierung: lagerort.sortierung,
-        aktiv: lagerort.aktiv
-      });
-    } else {
-      setEditingLagerort(null);
-      setFormData({
-        name: '',
-        beschreibung: '',
-        sortierung: lagerorte.length, // Ans Ende setzen
-        aktiv: true
-      });
-    }
-    setShowModal(true);
-  };
+  // Sortierung ändern
+  const changeSortierung = async (lagerort, direction) => {
+    const newSortierung = direction === 'up' 
+      ? lagerort.sortierung - 1 
+      : lagerort.sortierung + 1;
 
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setEditingLagerort(null);
-    setFormData({ name: '', beschreibung: '', sortierung: 0, aktiv: true });
+    try {
+      const response = await fetch(`/api/lagerorte/${lagerort.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sortierung: newSortierung })
+      });
+
+      if (response.ok) {
+        await loadLagerorte();
+      }
+    } catch (error) {
+      console.error('Fehler beim Sortieren:', error);
+    }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="p-8 flex justify-center">
+        <div className="text-gray-500">Lade Lagerorte...</div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="p-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Archive size={20} className="text-blue-600" />
-          <h2 className="text-xl font-bold text-gray-900">Lagerorte</h2>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+            <Archive size={32} className="text-indigo-600" />
+            Lagerorte
+          </h1>
+          <p className="text-gray-600 mt-1">
+            Verwalte deine Lagerorte (Keller, Schränke im Käfig, Werkstatt/Büro)
+          </p>
         </div>
+        
         <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+          onClick={() => openModal()}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
         >
-          <Plus size={16} />
+          <Plus size={20} />
           Neuer Lagerort
         </button>
       </div>
 
       {/* Liste */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {lagerorte.map((lagerort) => (
-          <div
-            key={lagerort.id}
-            className={`bg-white border rounded-lg p-4 ${
-              lagerort.aktiv ? 'border-gray-200' : 'border-gray-300 bg-gray-50'
-            }`}
-          >
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-900">{lagerort.name}</h3>
-                {!lagerort.aktiv && (
-                  <span className="text-xs text-gray-500">Inaktiv</span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleOpenModal(lagerort)}
-                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-                  title="Bearbeiten"
-                >
-                  <Edit2 size={14} />
-                </button>
-                <button
-                  onClick={() => handleDelete(lagerort.id, lagerort.name)}
-                  className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                  title="Löschen"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-            {lagerort.beschreibung && (
-              <p className="text-sm text-gray-600">{lagerort.beschreibung}</p>
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Sortierung
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Beschreibung
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Aktionen
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {lagerorte.length === 0 ? (
+              <tr>
+                <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+                  Noch keine Lagerorte vorhanden
+                </td>
+              </tr>
+            ) : (
+              lagerorte.map((lagerort) => (
+                <tr key={lagerort.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => changeSortierung(lagerort, 'up')}
+                        className="p-1 text-gray-400 hover:text-indigo-600"
+                        title="Nach oben"
+                      >
+                        <ArrowUp size={16} />
+                      </button>
+                      <span className="text-gray-600">{lagerort.sortierung}</span>
+                      <button
+                        onClick={() => changeSortierung(lagerort, 'down')}
+                        className="p-1 text-gray-400 hover:text-indigo-600"
+                        title="Nach unten"
+                      >
+                        <ArrowDown size={16} />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {lagerort.name}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-500">
+                      {lagerort.beschreibung || '-'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      lagerort.aktiv 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {lagerort.aktiv ? 'Aktiv' : 'Inaktiv'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button
+                      onClick={() => openModal(lagerort)}
+                      className="text-indigo-600 hover:text-indigo-900 mr-4"
+                      title="Bearbeiten"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(lagerort.id)}
+                      className="text-red-600 hover:text-red-900"
+                      title="Löschen"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))
             )}
-            <div className="mt-2 text-xs text-gray-500">
-              Sortierung: {lagerort.sortierung}
-            </div>
-          </div>
-        ))}
+          </tbody>
+        </table>
       </div>
-
-      {lagerorte.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <Archive size={48} className="mx-auto text-gray-400 mb-3" />
-          <p className="text-gray-600 mb-4">Noch keine Lagerorte angelegt</p>
-          <button
-            onClick={() => handleOpenModal()}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Ersten Lagerort erstellen
-          </button>
-        </div>
-      )}
 
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold mb-4">
-              {editingLagerort ? 'Lagerort bearbeiten' : 'Neuer Lagerort'}
-            </h3>
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">
+              {editingId ? 'Lagerort bearbeiten' : 'Neuer Lagerort'}
+            </h2>
+            
+            <form onSubmit={handleSave}>
+              <div className="space-y-4">
+                {/* Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                    placeholder="z.B. Keller, Schränke im Käfig"
+                  />
+                </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Name *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                  placeholder="z.B. Keller, Schränke im Käfig"
-                  required
-                />
+                {/* Beschreibung */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Beschreibung
+                  </label>
+                  <textarea
+                    value={formData.beschreibung}
+                    onChange={(e) => setFormData({ ...formData, beschreibung: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    rows="3"
+                    placeholder="z.B. Regal 1-5 im Keller"
+                  />
+                </div>
+
+                {/* Sortierung */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Sortierung
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.sortierung}
+                    onChange={(e) => setFormData({ ...formData, sortierung: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Niedrigere Zahl = weiter oben
+                  </p>
+                </div>
+
+                {/* Aktiv */}
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.aktiv}
+                    onChange={(e) => setFormData({ ...formData, aktiv: e.target.checked })}
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 block text-sm text-gray-900">
+                    Aktiv
+                  </label>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Beschreibung
-                </label>
-                <textarea
-                  value={formData.beschreibung}
-                  onChange={(e) => setFormData({ ...formData, beschreibung: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                  placeholder="z.B. Regal 1-5 im Keller"
-                  rows="2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Sortierung
-                </label>
-                <input
-                  type="number"
-                  value={formData.sortierung}
-                  onChange={(e) => setFormData({ ...formData, sortierung: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                  min="0"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Niedrigere Zahl = weiter oben in der Liste
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="aktiv"
-                  checked={formData.aktiv}
-                  onChange={(e) => setFormData({ ...formData, aktiv: e.target.checked })}
-                  className="rounded"
-                />
-                <label htmlFor="aktiv" className="text-sm text-gray-700">
-                  Aktiv
-                </label>
-              </div>
-
-              <div className="flex gap-2 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  {editingLagerort ? 'Speichern' : 'Erstellen'}
-                </button>
+              {/* Buttons */}
+              <div className="flex justify-end gap-3 mt-6">
                 <button
                   type="button"
-                  onClick={handleCloseModal}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                 >
+                  <X size={18} className="inline mr-1" />
                   Abbrechen
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                >
+                  <Save size={18} className="inline mr-1" />
+                  Speichern
                 </button>
               </div>
             </form>

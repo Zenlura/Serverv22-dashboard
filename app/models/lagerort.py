@@ -30,8 +30,8 @@ class Lagerort(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), server_onupdate=func.now())
     
     # Relationships
-    artikel = relationship("Artikel", back_populates="lagerort_obj")
-    artikel_varianten = relationship("ArtikelVariante", back_populates="lagerort_obj")
+    artikel = relationship("Artikel", back_populates="lagerort_obj")  # AKTIVIERT!
+    artikel_varianten = relationship("ArtikelVariante", back_populates="lagerort_obj")  # AKTIVIERT!
     
     def __repr__(self):
         return f"<Lagerort {self.name}>"

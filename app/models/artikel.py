@@ -70,7 +70,7 @@ class Artikel(Base):
     artikel_lieferanten = relationship("ArtikelLieferant", back_populates="artikel", cascade="all, delete-orphan")
     bestand_historie = relationship("BestandHistorie", back_populates="artikel", cascade="all, delete-orphan")
     varianten = relationship("ArtikelVariante", back_populates="artikel", cascade="all, delete-orphan")
-    # lagerort_obj = relationship("Lagerort", back_populates="artikel")  # DEAKTIVIERT: Lagerort-Tabelle existiert noch nicht
+    lagerort_obj = relationship("Lagerort", back_populates="artikel")  # AKTIVIERT!
     
     def __repr__(self):
         return f"<Artikel {self.artikelnummer} - {self.bezeichnung}>"

@@ -9,6 +9,7 @@ import ReparaturenListe from './components/ReparaturenListe'
 import Leihraeder from './components/Leihraeder'
 import VermietungenListe from './components/VermietungenListe'
 import KundenListe from './components/KundenListe'
+import LagerorteVerwaltung from './components/LagerorteVerwaltung'
 import ConnectScreen from './components/ConnectScreen'
 
 function App() {
@@ -23,7 +24,7 @@ function App() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
     const view = urlParams.get('view')
-    if (view && ['dashboard', 'kunden', 'artikel', 'bestellungen', 'reparaturen', 'leihraeder', 'vermietungen', 'connect'].includes(view)) {
+    if (view && ['dashboard', 'kunden', 'artikel', 'lagerorte', 'bestellungen', 'reparaturen', 'leihraeder', 'vermietungen', 'connect'].includes(view)) {
       setActiveView(view)
     }
   }, [])
@@ -169,6 +170,16 @@ function App() {
               📦 Artikel
             </button>
             <button
+              onClick={() => handleNavigate('lagerorte')}
+              className={`px-6 py-3 font-medium transition whitespace-nowrap ${
+                activeView === 'lagerorte'
+                  ? 'bg-white text-blue-600 rounded-t-lg'
+                  : 'text-white hover:bg-blue-500 rounded-t-lg'
+              }`}
+            >
+              🗃️ Lagerorte
+            </button>
+            <button
               onClick={() => handleNavigate('bestellungen')}
               className={`px-6 py-3 font-medium transition whitespace-nowrap ${
                 activeView === 'bestellungen'
@@ -227,6 +238,7 @@ function App() {
         {activeView === 'dashboard' && <Dashboard onNavigate={handleNavigate} showToast={showToast} />}
         {activeView === 'kunden' && <KundenListe showToast={showToast} />}
         {activeView === 'artikel' && <ArtikelListe showToast={showToast} />}
+        {activeView === 'lagerorte' && <LagerorteVerwaltung showToast={showToast} />}
         {activeView === 'bestellungen' && (
           <BestellungenListe 
             showToast={showToast} 
