@@ -91,8 +91,14 @@ function BestellungErstellenModal({ artikel: initialArtikel, onClose, onSuccess 
       id: Date.now(),
       artikel_id: initialArtikel.id,
       artikel: initialArtikel,
+      // API-konforme Felder
+      artikelnummer: initialArtikel.artikelnummer,
+      beschreibung: initialArtikel.bezeichnung,
+      etrto: initialArtikel.etrto || null,
+      zoll_info: initialArtikel.zoll_info || null,
       menge: vorschlag,
       einzelpreis: parseFloat(preis) || 0,
+      verkaufspreis: initialArtikel.verkaufspreis || (parseFloat(preis) || 0) * 1.5,
       notizen: ''
     }])
   }
@@ -126,8 +132,14 @@ function BestellungErstellenModal({ artikel: initialArtikel, onClose, onSuccess 
       id: Date.now(),
       artikel_id: selectedArtikel.id,
       artikel: selectedArtikel,
+      // API-konforme Felder
+      artikelnummer: selectedArtikel.artikelnummer,
+      beschreibung: selectedArtikel.bezeichnung,
+      etrto: selectedArtikel.etrto || null,
+      zoll_info: selectedArtikel.zoll_info || null,
       menge: parseInt(menge),
       einzelpreis: parseFloat(einzelpreis),
+      verkaufspreis: selectedArtikel.verkaufspreis || parseFloat(einzelpreis) * 1.5,
       notizen: ''
     }
 
@@ -183,14 +195,17 @@ function BestellungErstellenModal({ artikel: initialArtikel, onClose, onSuccess 
       const bestellung = {
         lieferant_id: selectedLieferant,
         positionen: warenkorb.map(p => ({
-          artikel_id: p.artikel_id,
-          menge: p.menge,
-          einzelpreis: p.einzelpreis.toString(),
+          artikel_id: p.artikel_id || null,
+          artikelnummer: p.artikelnummer,
+          beschreibung: p.beschreibung,
+          etrto: p.etrto || null,
+          zoll_info: p.zoll_info || null,
+          menge_bestellt: parseInt(p.menge),
+          einkaufspreis: parseFloat(p.einzelpreis),
+          verkaufspreis: parseFloat(p.verkaufspreis || p.einzelpreis * 1.5),
           notizen: p.notizen || null
         })),
-        versandkosten: versandkosten.toString(),
-        notizen: notizen || null,
-        interne_notizen: interneNotizen || null
+        notizen: notizen || null
       }
 
       const response = await fetch('/api/bestellungen', {

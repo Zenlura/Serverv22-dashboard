@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
 import ArtikelListe from './components/ArtikelListe'
 import BestellungenListe from './components/BestellungenListe'
+import BestellungErstellenModal from './components/BestellungErstellenModal'
 import ReparaturenListe from './components/ReparaturenListe'
 import Leihraeder from './components/Leihraeder'
 import VermietungenListe from './components/VermietungenListe'
@@ -11,6 +12,8 @@ import ConnectScreen from './components/ConnectScreen'
 function App() {
   const [activeView, setActiveView] = useState('dashboard')
   const [toastMessage, setToastMessage] = useState(null)
+  const [showBestellungModal, setShowBestellungModal] = useState(false)
+  const [bestellungRefreshKey, setBestellungRefreshKey] = useState(0)
 
   // Navigation aus URL lesen beim Start
   useEffect(() => {
@@ -35,6 +38,16 @@ function App() {
   const showToast = (message, type = 'info') => {
     setToastMessage({ message, type })
     setTimeout(() => setToastMessage(null), 3000)
+  }
+
+  // Bestellungen Modal Handlers
+  const handleNewBestellung = () => {
+    setShowBestellungModal(true)
+  }
+
+  const handleBestellungSuccess = (bestellung) => {
+    showToast(`Bestellung ${bestellung.bestellnummer} erstellt!`, 'success')
+    setBestellungRefreshKey(prev => prev + 1)
   }
 
   return (
@@ -138,7 +151,13 @@ function App() {
         {activeView === 'dashboard' && <Dashboard onNavigate={handleNavigate} showToast={showToast} />}
         {activeView === 'kunden' && <KundenListe showToast={showToast} />}
         {activeView === 'artikel' && <ArtikelListe showToast={showToast} />}
-        {activeView === 'bestellungen' && <BestellungenListe showToast={showToast} />}
+        {activeView === 'bestellungen' && (
+          <BestellungenListe 
+            showToast={showToast} 
+            onNewBestellung={handleNewBestellung}
+            refreshKey={bestellungRefreshKey}
+          />
+        )}
         {activeView === 'reparaturen' && <ReparaturenListe showToast={showToast} />}
         {activeView === 'leihraeder' && <Leihraeder showToast={showToast} />}
         {activeView === 'vermietungen' && <VermietungenListe showToast={showToast} />}
@@ -157,6 +176,14 @@ function App() {
             {toastMessage.message}
           </div>
         </div>
+      )}
+
+      {/* Bestellung Erstellen Modal */}
+      {showBestellungModal && (
+        <BestellungErstellenModal
+          onClose={() => setShowBestellungModal(false)}
+          onSuccess={handleBestellungSuccess}
+        />
       )}
 
       {/* Footer */}

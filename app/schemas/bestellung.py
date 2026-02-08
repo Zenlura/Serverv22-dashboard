@@ -140,8 +140,18 @@ class BestellungResponse(BestellungBase):
     lieferstatus_prozent: int
     
     # Relationships
-    lieferant: Optional[dict] = None  # Lieferant-Daten
+    lieferant: Optional[LieferantInBestellung] = None
     positionen: List[BestellPositionResponse] = []
+    
+    class Config:
+        from_attributes = True
+
+
+class LieferantInBestellung(BaseModel):
+    """Vereinfachte Lieferant-Daten für Bestellungen"""
+    id: int
+    name: str
+    kurzname: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -155,7 +165,7 @@ class BestellungListItem(BaseModel):
     
     # Lieferant
     lieferant_id: int
-    lieferant: Optional[dict] = None  # {id, name, kurzname}
+    lieferant: Optional[LieferantInBestellung] = None
     
     # Summen
     gesamtsumme_ek: Optional[Decimal] = None
