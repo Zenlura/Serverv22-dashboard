@@ -3,6 +3,8 @@ import Dashboard from './components/Dashboard'
 import ArtikelListe from './components/ArtikelListe'
 import BestellungenListe from './components/BestellungenListe'
 import BestellungErstellenModal from './components/BestellungErstellenModal'
+import BestellungBearbeitenModal from './components/BestellungBearbeitenModal'
+import { WareneingangModal } from './components/BestellungModals'
 import ReparaturenListe from './components/ReparaturenListe'
 import Leihraeder from './components/Leihraeder'
 import VermietungenListe from './components/VermietungenListe'
@@ -14,6 +16,8 @@ function App() {
   const [toastMessage, setToastMessage] = useState(null)
   const [showBestellungModal, setShowBestellungModal] = useState(false)
   const [bestellungRefreshKey, setBestellungRefreshKey] = useState(0)
+  const [wareneingangBestellung, setWareneingangBestellung] = useState(null)
+  const [editBestellung, setEditBestellung] = useState(null)
 
   // Navigation aus URL lesen beim Start
   useEffect(() => {
@@ -45,21 +49,81 @@ function App() {
     setShowBestellungModal(true)
   }
 
-  const handleEditBestellung = (bestellung) => {
-    // TODO: Bearbeiten-Modal öffnen
-    showToast('Bearbeiten-Funktion wird noch implementiert', 'info')
-    console.log('Bestellung bearbeiten:', bestellung)
+  const handleEditBestellung = async (bestellung) => {
+    // Validierung: Nur offene Bestellungen bearbeitbar
+    if (bestellung.status !== 'offen') {
+      showToast('Nur offene Bestellungen können bearbeitet werden!', 'warning')
+      return
+    }
+    
+    // Bestellung mit Positionen laden
+    try {
+      const response = await fetch(`/api/bestellungen/${bestellung.id}`)
+      if (!response.ok) throw new Error('Fehler beim Laden der Bestellung')
+      
+      const data = await response.json()
+      setEditBestellung(data)
+    } catch (err) {
+      showToast(`Fehler: ${err.message}`, 'error')
+      console.error('Fehler beim Laden:', err)
+    }
   }
 
-  const handleWareneingangClick = (bestellung) => {
-    // TODO: Wareneingang-Modal öffnen
-    showToast('Wareneingang-Funktion wird noch implementiert', 'info')
-    console.log('Wareneingang für Bestellung:', bestellung)
+  const handleEditSuccess = (updated) => {
+    setEditBestellung(null)
+    setBestellungRefreshKey(prev => prev + 1)
+    showToast(`Bestellung ${updated.bestellnummer} aktualisiert!`, 'success')
+  }
+
+  const handleWareneingangClick = async (bestellung) => {
+    // Bestellung mit Positionen laden
+    try {
+      const response = await fetch(`/api/bestellungen/${bestellung.id}`)
+      if (!response.ok) throw new Error('Fehler beim Laden der Bestellung')
+      
+      const data = await response.json()
+      setWareneingangBestellung(data)
+    } catch (err) {
+      showToast(`Fehler: ${err.message}`, 'error')
+      console.error('Fehler beim Laden:', err)
+    }
+  }
+
+  const handleWareneingangSave = () => {
+    setWareneingangBestellung(null)
+    setBestellungRefreshKey(prev => prev + 1)
+    showToast('Wareneingang erfasst!', 'success')
   }
 
   const handleBestellungSuccess = (bestellung) => {
     showToast(`Bestellung ${bestellung.bestellnummer} erstellt!`, 'success')
     setBestellungRefreshKey(prev => prev + 1)
+  }
+
+  const handleStatusChange = async (bestellungId, newStatus, bestellnummer) => {
+    try {
+      const response = await fetch(`/api/bestellungen/${bestellungId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Fehler beim Status-Update')
+      }
+
+      const statusLabels = {
+        'bestellt': 'Als bestellt markiert',
+        'abgeschlossen': 'Abgeschlossen'
+      }
+
+      showToast(`${bestellnummer}: ${statusLabels[newStatus] || 'Status aktualisiert'}`, 'success')
+      setBestellungRefreshKey(prev => prev + 1)
+    } catch (err) {
+      showToast(`Fehler: ${err.message}`, 'error')
+      console.error('Status-Update Fehler:', err)
+    }
   }
 
   return (
@@ -169,6 +233,7 @@ function App() {
             onNewBestellung={handleNewBestellung}
             onEditBestellung={handleEditBestellung}
             onWareneingangClick={handleWareneingangClick}
+            onStatusChange={handleStatusChange}
             refreshKey={bestellungRefreshKey}
           />
         )}
@@ -197,6 +262,24 @@ function App() {
         <BestellungErstellenModal
           onClose={() => setShowBestellungModal(false)}
           onSuccess={handleBestellungSuccess}
+        />
+      )}
+
+      {/* Bestellung Bearbeiten Modal */}
+      {editBestellung && (
+        <BestellungBearbeitenModal
+          bestellung={editBestellung}
+          onClose={() => setEditBestellung(null)}
+          onSave={handleEditSuccess}
+        />
+      )}
+
+      {/* Wareneingang Modal */}
+      {wareneingangBestellung && (
+        <WareneingangModal
+          bestellung={wareneingangBestellung}
+          onClose={() => setWareneingangBestellung(null)}
+          onSave={handleWareneingangSave}
         />
       )}
 

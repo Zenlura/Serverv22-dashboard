@@ -43,7 +43,7 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
   useEffect(() => {
     if (bestellung) {
       setFormData({
-        status: bestellung.status || 'entwurf',
+        status: bestellung.status || 'offen',
         lieferdatum_erwartet: bestellung.lieferdatum_erwartet 
           ? bestellung.lieferdatum_erwartet.split('T')[0] 
           : '',
@@ -106,7 +106,7 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
     if (!editingPosition) return;
 
     // Nur bei Entwürfen kann Menge/Preis geändert werden
-    if (bestellung.status !== 'entwurf' && 
+    if (bestellung.status !== 'offen' && 
         (editingPosition.menge !== positionen.find(p => p.id === editingPosition.id)?.menge ||
          editingPosition.einzelpreis !== positionen.find(p => p.id === editingPosition.id)?.einzelpreis)) {
       showToast('Menge und Preis können nur bei Entwürfen geändert werden', 'warning');
@@ -153,8 +153,8 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
       return;
     }
 
-    if (bestellung.status !== 'entwurf') {
-      showToast('Positionen können nur bei Entwürfen gelöscht werden', 'warning');
+    if (bestellung.status !== 'offen') {
+      showToast('Positionen können nur bei offenen Bestellungen gelöscht werden', 'warning');
       return;
     }
 
@@ -194,8 +194,8 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
   const handlePositionAdd = async () => {
     if (!neuerArtikel) return;
 
-    if (bestellung.status !== 'entwurf') {
-      showToast('Positionen können nur bei Entwürfen hinzugefügt werden', 'warning');
+    if (bestellung.status !== 'offen') {
+      showToast('Positionen können nur bei offenen Bestellungen hinzugefügt werden', 'warning');
       return;
     }
 
@@ -290,8 +290,8 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
 
   // Bestellung löschen
   const handleDelete = async () => {
-    if (bestellung.status !== 'entwurf') {
-      showToast('Nur Entwürfe können gelöscht werden', 'warning');
+    if (bestellung.status !== 'offen') {
+      showToast('Nur offene Bestellungen können gelöscht werden', 'warning');
       return;
     }
 
@@ -319,11 +319,11 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
   };
 
   const statusOptions = [
-    { value: 'entwurf', label: 'Entwurf', color: 'bg-gray-100 text-gray-800' },
+    { value: 'offen', label: 'Offen', color: 'bg-gray-100 text-gray-800' },
     { value: 'bestellt', label: 'Bestellt', color: 'bg-blue-100 text-blue-800' },
-    { value: 'teilgeliefert', label: 'Teilgeliefert', color: 'bg-yellow-100 text-yellow-800' },
+    { value: 'teilweise_geliefert', label: 'Teilweise geliefert', color: 'bg-yellow-100 text-yellow-800' },
     { value: 'geliefert', label: 'Geliefert', color: 'bg-green-100 text-green-800' },
-    { value: 'storniert', label: 'Storniert', color: 'bg-red-100 text-red-800' }
+    { value: 'abgeschlossen', label: 'Abgeschlossen', color: 'bg-purple-100 text-purple-800' }
   ];
 
   return (
@@ -363,7 +363,7 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
                 <h3 className="text-lg font-semibold text-gray-900">
                   Positionen ({positionen.length})
                 </h3>
-                {bestellung?.status === 'entwurf' && (
+                {bestellung?.status === 'offen' && (
                   <button
                     onClick={() => setShowAddArtikel(!showAddArtikel)}
                     className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
@@ -486,7 +486,7 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
                               value={editingPosition.menge}
                               onChange={(e) => setEditingPosition({ ...editingPosition, menge: e.target.value })}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                              disabled={bestellung.status !== 'entwurf'}
+                              disabled={bestellung.status !== 'offen'}
                             />
                           </div>
                           <div>
@@ -498,7 +498,7 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
                               value={editingPosition.einzelpreis}
                               onChange={(e) => setEditingPosition({ ...editingPosition, einzelpreis: e.target.value })}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                              disabled={bestellung.status !== 'entwurf'}
+                              disabled={bestellung.status !== 'offen'}
                             />
                           </div>
                         </div>
@@ -543,7 +543,7 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
                           >
                             <PencilIcon className="w-4 h-4" />
                           </button>
-                          {bestellung.status === 'entwurf' && positionen.length > 1 && (
+                          {bestellung.status === 'offen' && positionen.length > 1 && (
                             <button
                               onClick={() => handlePositionDelete(position.id)}
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
@@ -640,7 +640,7 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
                   value={formData.versandkosten}
                   onChange={(e) => setFormData({ ...formData, versandkosten: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  disabled={bestellung.status !== 'entwurf'}
+                  disabled={bestellung.status !== 'offen'}
                 />
               </div>
 
@@ -678,7 +678,7 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
         {/* Footer */}
         <div className="bg-gray-50 px-6 py-4 flex justify-between items-center border-t">
           <div>
-            {bestellung?.status === 'entwurf' && (
+            {bestellung?.status === 'offen' && (
               <button
                 onClick={handleDelete}
                 disabled={loading}

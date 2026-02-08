@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, Download, Eye, Edit2, Trash2, AlertCircle, CheckCircle, Clock, Truck, Archive } from 'lucide-react';
+import { Package, Plus, Download, Eye, Edit2, Trash2, AlertCircle, CheckCircle, Clock, Truck, Archive, Send } from 'lucide-react';
 
 /**
  * BestellungenListe - Hauptübersicht aller Sammelbestellungen
@@ -10,7 +10,7 @@ import { Package, Plus, Download, Eye, Edit2, Trash2, AlertCircle, CheckCircle, 
  * - PDF-Download
  * - Wareneingang erfassen
  */
-const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangClick, refreshKey = 0 }) => {
+const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangClick, onStatusChange, refreshKey = 0 }) => {
   const [bestellungen, setBestellungen] = useState([]);
   const [lieferanten, setLieferanten] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -163,6 +163,7 @@ const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangCl
 
           {/* Actions */}
           <div className="flex items-center gap-1">
+            {/* PDF Download */}
             <button
               onClick={() => handleDownloadPDF(bestellung.id, bestellung.bestellnummer)}
               className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
@@ -171,6 +172,22 @@ const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangCl
               <Download size={16} />
             </button>
             
+            {/* Als bestellt markieren - nur bei Status "offen" */}
+            {bestellung.status === 'offen' && (
+              <button
+                onClick={() => {
+                  if (confirm(`Bestellung ${bestellung.bestellnummer} als bestellt markieren?\n\nDanach kann sie versendet werden.`)) {
+                    onStatusChange(bestellung.id, 'bestellt', bestellung.bestellnummer)
+                  }
+                }}
+                className="p-1.5 text-purple-600 hover:bg-purple-50 rounded"
+                title="Als bestellt markieren"
+              >
+                <Send size={16} />
+              </button>
+            )}
+
+            {/* Wareneingang erfassen - bei "bestellt" oder "teilweise_geliefert" */}
             {(bestellung.status === 'bestellt' || bestellung.status === 'teilweise_geliefert') && (
               <button
                 onClick={() => onWareneingangClick(bestellung)}
@@ -181,6 +198,22 @@ const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangCl
               </button>
             )}
 
+            {/* Abschließen - nur bei Status "geliefert" */}
+            {bestellung.status === 'geliefert' && (
+              <button
+                onClick={() => {
+                  if (confirm(`Bestellung ${bestellung.bestellnummer} abschließen?\n\nDie Bestellung wird damit als erledigt markiert.`)) {
+                    onStatusChange(bestellung.id, 'abgeschlossen', bestellung.bestellnummer)
+                  }
+                }}
+                className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
+                title="Bestellung abschließen"
+              >
+                <Archive size={16} />
+              </button>
+            )}
+
+            {/* Bearbeiten */}
             <button
               onClick={() => onEditBestellung(bestellung)}
               className="p-1.5 text-gray-600 hover:bg-gray-50 rounded"
@@ -189,6 +222,7 @@ const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangCl
               <Edit2 size={16} />
             </button>
 
+            {/* Löschen - nur bei Status "offen" */}
             {bestellung.status === 'offen' && (
               <button
                 onClick={() => handleDeleteBestellung(bestellung.id)}
