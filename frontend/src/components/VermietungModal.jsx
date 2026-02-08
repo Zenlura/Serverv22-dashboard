@@ -257,24 +257,35 @@ function VermietungModalTyp({ onClose, onSave, vorauswahl }) {
     setLoading(true)
 
     try {
-      // ✅ BUGFIX: Sende korrekten Durchschnittspreis (für alte Backend-Kompatibilität)
       const gesamtAnzahl = Object.values(typPositionen).reduce((sum, n) => sum + n, 0)
+
+      if (gesamtAnzahl === 0) {
+        alert('Bitte mindestens ein Rad auswählen')
+        return
+      }
+
+      // ✨ Positionen-Array erstellen
+      const positionen = Object.entries(typPositionen)
+        .filter(([_, anzahl]) => anzahl > 0)
+        .map(([rad_typ, anzahl]) => ({
+          rad_typ,
+          anzahl
+        }))
 
       const vermietungData = {
         kunde_id: formData.kunde_id,
-        anzahl_raeder: gesamtAnzahl,
         von_datum: formData.von_datum,
         von_zeit: formData.von_zeit,
         bis_datum: formData.bis_datum,
         bis_zeit: formData.bis_zeit,
-        // ✅ BUGFIX: Runde auf 2 Dezimalstellen
-        tagespreis: parseFloat((preisInfo.gesamtpreis / (preisInfo.tage * gesamtAnzahl)).toFixed(2)),
-        anzahl_tage: preisInfo.tage,
-        gesamtpreis: preisInfo.gesamtpreis,
         kaution: parseFloat(formData.kaution),
-        notizen: formData.notizen,
-        status: 'reserviert'
+        notizen: formData.notizen || '',
+        status: 'reserviert',
+        // ✨ NEU: Positionen senden - Backend berechnet Preise automatisch
+        positionen: positionen
       }
+
+      console.log('Sende Vermietung:', vermietungData)
 
       const response = await fetch('/api/vermietungen/', {
         method: 'POST',

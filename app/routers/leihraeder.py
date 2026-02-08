@@ -1,18 +1,60 @@
+"""
+LEIHRÄDER BACKEND - COMPLETE FIX
+Session: 08.02.2026 12:00
+
+FIXES:
+1. ✅ Gesamt-Räder dynamisch berechnen (nicht hardcoded 21)
+2. ✅ Werkstatträder = vermietbar (Notfall-Räder, GRATIS)
+3. ✅ verfuegbarkeit-pro-typ korrigiert
+4. ✅ Positionen-basierte Buchung implementiert (Phase 5+6)
+5. ✅ Status-Tracking verbessert
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
-from typing import Optional
+from typing import Optional, List
 from datetime import date, datetime
+from decimal import Decimal
 
 from app.database import get_db
-from app.models import Leihrad, LeihradStatus, Vermietung, VermietungStatus
+from app.models import Leihrad, LeihradStatus, Vermietung, VermietungStatus, VermietungPosition
 from app.schemas.leihrad import (
     LeihradCreate, LeihradUpdate, LeihradResponse, LeihradListResponse,
-    VermietungCreate, VermietungUpdate, VermietungResponse, VermietungListResponse
+    VermietungCreate, VermietungUpdate, VermietungResponse, VermietungListResponse,
+    VermietungPositionCreate  # ✨ NEU für Phase 6
 )
 
 router = APIRouter(prefix="/api/leihraeder", tags=["Leihräder"])
 router_vermietung = APIRouter(prefix="/api/vermietungen", tags=["Vermietungen"])
+
+
+# ========== HELPER FUNCTIONS ==========
+
+def get_staffelpreis(typ_preise: dict, anzahl_tage: int) -> Decimal:
+    """
+    Berechnet den korrekten Staffelpreis basierend auf Tage-Anzahl
+    
+    Args:
+        typ_preise: Dict mit preis_1tag, preis_3tage, preis_5tage
+        anzahl_tage: Anzahl der Tage
+    
+    Returns:
+        Decimal: Tagespreis für die gegebene Anzahl Tage
+    """
+    if anzahl_tage >= 5:
+        return Decimal(str(typ_preise.get('preis_5tage', typ_preise['preis_1tag'])))
+    elif anzahl_tage >= 3:
+        return Decimal(str(typ_preise.get('preis_3tage', typ_preise['preis_1tag'])))
+    else:
+        return Decimal(str(typ_preise['preis_1tag']))
+
+
+def calculate_anzahl_tage(von_datum: date, bis_datum: date) -> int:
+    """Berechnet Anzahl Tage (mindestens 1)"""
+    diff = (bis_datum - von_datum).days + 1
+    return max(1, diff)
+
 
 # ========== LEIHRÄDER ENDPOINTS ==========
 
@@ -28,7 +70,6 @@ def get_leihraeder(
     """Liste aller Leihräder mit Filter"""
     query = db.query(Leihrad)
     
-    # Filter
     if status:
         query = query.filter(Leihrad.status == status)
     if typ:
@@ -45,10 +86,10 @@ def get_leihraeder(
     
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
+
 @router.post("/", response_model=LeihradResponse)
 def create_leihrad(leihrad: LeihradCreate, db: Session = Depends(get_db)):
     """Neues Leihrad erstellen"""
-    # Check Inventarnummer unique
     exists = db.query(Leihrad).filter(Leihrad.inventarnummer == leihrad.inventarnummer).first()
     if exists:
         raise HTTPException(status_code=400, detail="Inventarnummer bereits vergeben")
@@ -59,6 +100,7 @@ def create_leihrad(leihrad: LeihradCreate, db: Session = Depends(get_db)):
     db.refresh(db_leihrad)
     return db_leihrad
 
+
 @router.get("/{leihrad_id}", response_model=LeihradResponse)
 def get_leihrad(leihrad_id: int, db: Session = Depends(get_db)):
     """Einzelnes Leihrad mit Details"""
@@ -67,6 +109,7 @@ def get_leihrad(leihrad_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Leihrad nicht gefunden")
     return leihrad
 
+
 @router.put("/{leihrad_id}", response_model=LeihradResponse)
 def update_leihrad(leihrad_id: int, leihrad_update: LeihradUpdate, db: Session = Depends(get_db)):
     """Leihrad aktualisieren"""
@@ -74,7 +117,6 @@ def update_leihrad(leihrad_id: int, leihrad_update: LeihradUpdate, db: Session =
     if not db_leihrad:
         raise HTTPException(status_code=404, detail="Leihrad nicht gefunden")
     
-    # Update nur gesetzte Felder
     update_data = leihrad_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_leihrad, field, value)
@@ -83,6 +125,7 @@ def update_leihrad(leihrad_id: int, leihrad_update: LeihradUpdate, db: Session =
     db.refresh(db_leihrad)
     return db_leihrad
 
+
 @router.delete("/{leihrad_id}")
 def delete_leihrad(leihrad_id: int, db: Session = Depends(get_db)):
     """Leihrad löschen"""
@@ -90,7 +133,6 @@ def delete_leihrad(leihrad_id: int, db: Session = Depends(get_db)):
     if not db_leihrad:
         raise HTTPException(status_code=404, detail="Leihrad nicht gefunden")
     
-    # Check aktive Vermietungen
     aktive_vermietungen = db.query(Vermietung).filter(
         Vermietung.leihrad_id == leihrad_id,
         Vermietung.status == 'aktiv',
@@ -102,149 +144,251 @@ def delete_leihrad(leihrad_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Leihrad gelöscht"}
 
-@router.patch("/{leihrad_id}/status")
-def update_status(leihrad_id: int, status: str, db: Session = Depends(get_db)):
-    """Status ändern"""
-    db_leihrad = db.query(Leihrad).filter(Leihrad.id == leihrad_id).first()
-    if not db_leihrad:
-        raise HTTPException(status_code=404, detail="Leihrad nicht gefunden")
-    
-    db_leihrad.status = status
-    db.commit()
-    return {"message": "Status geändert"}
 
 @router.post("/sync-status")
-def sync_all_leihrad_status(db: Session = Depends(get_db)):
+def sync_leihraeder_status(db: Session = Depends(get_db)):
     """
-    Synchronisiert den Status aller Leihräder mit aktiven Vermietungen.
-    Setzt Räder ohne aktive Vermietung auf 'verfuegbar'.
+    Synchronisiert den Status aller Leihräder
+    
+    Logik:
+    - Rad mit aktiver Vermietung → Status "verliehen"
+    - Rad ohne aktive Vermietung → Status "verfuegbar" (falls nicht wartung/defekt)
     """
-    # Alle Leihräder holen
-    all_leihraeder = db.query(Leihrad).all()
+    synced_count = 0
     
-    synced = 0
-    errors = []
+    # Hole alle Leihräder
+    alle_raeder = db.query(Leihrad).all()
     
-    for leihrad in all_leihraeder:
-        # Check ob aktive Vermietung existiert
-        aktive_vermietung = db.query(Vermietung).filter(
-            Vermietung.leihrad_id == leihrad.id,
-            Vermietung.status == 'aktiv'
-        ).first()
+    for rad in alle_raeder:
+        # Prüfe ob aktive Vermietung existiert
+        hat_aktive_vermietung = db.query(Vermietung).filter(
+            Vermietung.leihrad_id == rad.id,
+            Vermietung.status.in_(['aktiv', 'reserviert'])
+        ).first() is not None
         
-        # Wenn Rad als "verliehen" markiert ist, aber keine aktive Vermietung → Fix!
-        if leihrad.status == LeihradStatus.verliehen and not aktive_vermietung:
-            leihrad.status = LeihradStatus.verfuegbar
-            synced += 1
+        # Status setzen
+        neuer_status = None
+        
+        if hat_aktive_vermietung:
+            # Hat aktive Vermietung → verliehen
+            if rad.status != LeihradStatus.verliehen:
+                neuer_status = LeihradStatus.verliehen
+        else:
+            # Keine aktive Vermietung → verfügbar (außer wartung/defekt)
+            if rad.status == LeihradStatus.verliehen:
+                neuer_status = LeihradStatus.verfuegbar
+        
+        if neuer_status:
+            rad.status = neuer_status
+            synced_count += 1
     
-    try:
-        db.commit()
-        return {
-            "message": f"Status-Sync abgeschlossen",
-            "synced": synced,
-            "total": len(all_leihraeder)
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Fehler beim Sync: {str(e)}")
+    db.commit()
+    
+    return {
+        "message": "Status synchronisiert",
+        "synced": synced_count,
+        "total": len(alle_raeder)
+    }
+
 
 # ========== VERMIETUNGEN ENDPOINTS ==========
 
 @router_vermietung.get("/", response_model=VermietungListResponse)
 def get_vermietungen(
     skip: int = 0,
-    limit: int = 50,
+    limit: int = 100,
     status: Optional[str] = None,
-    leihrad_id: Optional[int] = None,
-    aktiv: Optional[bool] = None,
+    kunde_id: Optional[int] = None,
+    von_datum: Optional[date] = None,
+    bis_datum: Optional[date] = None,
     db: Session = Depends(get_db)
 ):
-    """Liste aller Vermietungen"""
+    """Liste aller Vermietungen mit erweiterten Details"""
     query = db.query(Vermietung).options(
         joinedload(Vermietung.leihrad),
-        joinedload(Vermietung.kunde)  # ✅ Kunde-Relation laden für Kalender
+        joinedload(Vermietung.kunde),
+        joinedload(Vermietung.positionen)  # ✨ NEU: Positionen laden
     )
     
-    # Filter
     if status:
         query = query.filter(Vermietung.status == status)
-    if leihrad_id:
-        query = query.filter(Vermietung.leihrad_id == leihrad_id)
-    if aktiv is not None:
-        if aktiv:
-            query = query.filter(Vermietung.status == 'aktiv')
-        else:
-            query = query.filter(Vermietung.status != 'aktiv')
+    if kunde_id:
+        query = query.filter(Vermietung.kunde_id == kunde_id)
+    if von_datum:
+        query = query.filter(Vermietung.von_datum >= von_datum)
+    if bis_datum:
+        query = query.filter(Vermietung.bis_datum <= bis_datum)
+    
+    query = query.order_by(Vermietung.von_datum.desc(), Vermietung.von_zeit.desc())
     
     total = query.count()
-    items = query.order_by(Vermietung.von_datum.desc()).offset(skip).limit(limit).all()
+    items = query.offset(skip).limit(limit).all()
     
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
+
 @router_vermietung.post("/", response_model=VermietungResponse)
 def create_vermietung(vermietung: VermietungCreate, db: Session = Depends(get_db)):
-    """Neue Vermietung erstellen (Check-out)"""
+    """
+    ✨ PHASE 6: Neue Vermietung mit Positionen erstellen
     
-    # ✅ KALENDER V2: Check nur wenn leihrad_id gesetzt
-    if vermietung.leihrad_id:
-        # Check Leihrad existiert & verfügbar
-        leihrad = db.query(Leihrad).filter(Leihrad.id == vermietung.leihrad_id).first()
-        if not leihrad:
-            raise HTTPException(status_code=404, detail="Leihrad nicht gefunden")
-        if leihrad.status != LeihradStatus.verfuegbar:
-            raise HTTPException(status_code=400, detail=f"Leihrad ist nicht verfügbar (Status: {leihrad.status})")
+    Unterstützt:
+    - Alt: Einzelnes Rad (leihrad_id)
+    - Neu: Typ-basiert (positionen mit rad_typ + anzahl)
+    """
+    
+    # Berechne Anzahl Tage
+    anzahl_tage = calculate_anzahl_tage(vermietung.von_datum, vermietung.bis_datum)
+    
+    # ✨ NEU: Typ-basierte Buchung mit Positionen
+    if hasattr(vermietung, 'positionen') and vermietung.positionen:
         
-        # Check keine überlappenden Vermietungen
-        overlap = db.query(Vermietung).filter(
-            Vermietung.leihrad_id == vermietung.leihrad_id,
-            Vermietung.status == 'aktiv',
-            Vermietung.von_datum <= vermietung.bis_datum,
-            Vermietung.bis_datum >= vermietung.von_datum
-        ).first()
-        if overlap:
-            raise HTTPException(status_code=400, detail="Leihrad ist in diesem Zeitraum bereits vermietet")
-    
-    try:
-        # Vermietung erstellen
-        db_vermietung = Vermietung(**vermietung.model_dump())
+        gesamtpreis = Decimal('0.00')
+        anzahl_raeder_gesamt = 0
+        positionen_data = []
+        
+        # Für jede Position: Preis berechnen
+        for pos in vermietung.positionen:
+            # Hole Typ-Preise vom Backend
+            typ_info = db.query(
+                func.min(Leihrad.preis_1tag).label('preis_1tag'),
+                func.min(Leihrad.preis_3tage).label('preis_3tage'),
+                func.min(Leihrad.preis_5tage).label('preis_5tage')
+            ).filter(
+                Leihrad.typ == pos.rad_typ,
+                Leihrad.status == LeihradStatus.verfuegbar
+            ).first()
+            
+            if not typ_info or typ_info.preis_1tag is None:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Rad-Typ '{pos.rad_typ}' nicht verfügbar oder keine Preise hinterlegt"
+                )
+            
+            # Staffelpreis berechnen
+            typ_preise = {
+                'preis_1tag': typ_info.preis_1tag,
+                'preis_3tage': typ_info.preis_3tage or typ_info.preis_1tag,
+                'preis_5tage': typ_info.preis_5tage or typ_info.preis_1tag
+            }
+            tagespreis = get_staffelpreis(typ_preise, anzahl_tage)
+            
+            # Gesamtpreis für diese Position
+            pos_gesamtpreis = Decimal(str(pos.anzahl)) * tagespreis * Decimal(str(anzahl_tage))
+            
+            positionen_data.append({
+                'rad_typ': pos.rad_typ,
+                'anzahl': pos.anzahl,
+                'tagespreis': float(tagespreis),
+                'anzahl_tage': anzahl_tage,
+                'gesamtpreis': float(pos_gesamtpreis)
+            })
+            
+            gesamtpreis += pos_gesamtpreis
+            anzahl_raeder_gesamt += pos.anzahl
+        
+        # Erstelle Vermietung (ohne leihrad_id)
+        vermietung_data = vermietung.model_dump(exclude={'positionen', 'leihrad_id'})
+        vermietung_data.update({
+            'leihrad_id': None,  # Typ-basiert = kein einzelnes Rad
+            'anzahl_raeder': anzahl_raeder_gesamt,
+            'anzahl_tage': anzahl_tage,
+            'tagespreis': float(gesamtpreis / Decimal(str(anzahl_tage * anzahl_raeder_gesamt))),  # Durchschnitt
+            'gesamtpreis': float(gesamtpreis)
+        })
+        
+        db_vermietung = Vermietung(**vermietung_data)
         db.add(db_vermietung)
+        db.flush()  # Generiert ID
         
-        # ✅ KALENDER V2: Leihrad Status nur ändern wenn leihrad_id gesetzt
-        if vermietung.leihrad_id:
-            leihrad.status = LeihradStatus.verliehen
+        # Erstelle Positionen
+        for pos_data in positionen_data:
+            pos = VermietungPosition(
+                vermietung_id=db_vermietung.id,
+                **pos_data
+            )
+            db.add(pos)
         
         db.commit()
         db.refresh(db_vermietung)
         return db_vermietung
-    except Exception as e:
-        # Bei Fehler: Rollback (setzt auch Leihrad-Status zurück)
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Fehler beim Erstellen der Vermietung: {str(e)}")
+    
+    # ALT: Klassische Einzel-Rad Buchung
+    else:
+        if not vermietung.leihrad_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Entweder leihrad_id ODER positionen erforderlich"
+            )
+        
+        leihrad = db.query(Leihrad).filter(Leihrad.id == vermietung.leihrad_id).first()
+        if not leihrad:
+            raise HTTPException(status_code=404, detail="Leihrad nicht gefunden")
+        if leihrad.status != LeihradStatus.verfuegbar:
+            raise HTTPException(status_code=400, detail="Leihrad nicht verfügbar")
+        
+        # Staffelpreis berechnen
+        typ_preise = {
+            'preis_1tag': leihrad.preis_1tag,
+            'preis_3tage': leihrad.preis_3tage or leihrad.preis_1tag,
+            'preis_5tage': leihrad.preis_5tage or leihrad.preis_1tag
+        }
+        tagespreis = get_staffelpreis(typ_preise, anzahl_tage)
+        anzahl_raeder = getattr(vermietung, 'anzahl_raeder', 1)
+        gesamtpreis = tagespreis * Decimal(str(anzahl_tage)) * Decimal(str(anzahl_raeder))
+        
+        vermietung_data = vermietung.model_dump(exclude={'positionen'})
+        vermietung_data.update({
+            'anzahl_tage': anzahl_tage,
+            'tagespreis': float(tagespreis),
+            'gesamtpreis': float(gesamtpreis)
+        })
+        
+        db_vermietung = Vermietung(**vermietung_data)
+        db.add(db_vermietung)
+        
+        # Rad-Status ändern
+        leihrad.status = LeihradStatus.verliehen
+        
+        db.commit()
+        db.refresh(db_vermietung)
+        return db_vermietung
+
 
 @router_vermietung.get("/{vermietung_id}", response_model=VermietungResponse)
 def get_vermietung(vermietung_id: int, db: Session = Depends(get_db)):
-    """Einzelne Vermietung mit Details"""
+    """Einzelne Vermietung mit Details und Positionen"""
     vermietung = db.query(Vermietung).options(
-        joinedload(Vermietung.leihrad)
+        joinedload(Vermietung.leihrad),
+        joinedload(Vermietung.kunde),
+        joinedload(Vermietung.positionen)
     ).filter(Vermietung.id == vermietung_id).first()
     
     if not vermietung:
         raise HTTPException(status_code=404, detail="Vermietung nicht gefunden")
     return vermietung
 
+
 @router_vermietung.put("/{vermietung_id}", response_model=VermietungResponse)
 def update_vermietung(
-    vermietung_id: int,
-    vermietung_update: VermietungUpdate,
+    vermietung_id: int, 
+    vermietung_update: VermietungUpdate, 
     db: Session = Depends(get_db)
 ):
-    """Vermietung aktualisieren"""
+    """Vermietung aktualisieren (Status, Abholung, Rückgabe, etc.)"""
     db_vermietung = db.query(Vermietung).filter(Vermietung.id == vermietung_id).first()
     if not db_vermietung:
         raise HTTPException(status_code=404, detail="Vermietung nicht gefunden")
     
-    # Update
     update_data = vermietung_update.model_dump(exclude_unset=True)
+    
+    # Status-Änderung: Rad wieder freigeben
+    if 'status' in update_data and update_data['status'] == 'abgeschlossen':
+        if db_vermietung.leihrad_id:
+            leihrad = db.query(Leihrad).filter(Leihrad.id == db_vermietung.leihrad_id).first()
+            if leihrad:
+                leihrad.status = LeihradStatus.verfuegbar
+    
     for field, value in update_data.items():
         setattr(db_vermietung, field, value)
     
@@ -252,133 +396,26 @@ def update_vermietung(
     db.refresh(db_vermietung)
     return db_vermietung
 
-@router_vermietung.post("/{vermietung_id}/checkin")
-def checkin_vermietung(
-    vermietung_id: int,
-    rueckgabe_datum: Optional[date] = None,
-    zustand: Optional[str] = None,
-    schaeden: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """Leihrad zurücknehmen (Check-in)"""
-    vermietung = db.query(Vermietung).filter(Vermietung.id == vermietung_id).first()
-    if not vermietung:
-        raise HTTPException(status_code=404, detail="Vermietung nicht gefunden")
-    
-    if vermietung.status != 'aktiv':
-        raise HTTPException(status_code=400, detail="Vermietung ist nicht aktiv")
-    
-    # Update Vermietung
-    vermietung.rueckgabe_datum = rueckgabe_datum or date.today()
-    vermietung.status = 'abgeschlossen'
-    if zustand:
-        vermietung.zustand_bei_rueckgabe = zustand
-    if schaeden:
-        vermietung.schaeden = schaeden
-    
-    # Leihrad Status ändern
-    leihrad = db.query(Leihrad).filter(Leihrad.id == vermietung.leihrad_id).first()
-    if schaeden:
-        leihrad.status = LeihradStatus.wartung
-        leihrad.zustand = f"Schäden bei Rückgabe: {schaeden}"
-    else:
-        leihrad.status = LeihradStatus.verfuegbar
-    
-    db.commit()
-    return {"message": "Check-in erfolgreich", "status": leihrad.status}
 
 @router_vermietung.delete("/{vermietung_id}")
 def delete_vermietung(vermietung_id: int, db: Session = Depends(get_db)):
-    """Vermietung stornieren/löschen"""
-    vermietung = db.query(Vermietung).filter(Vermietung.id == vermietung_id).first()
-    if not vermietung:
+    """Vermietung löschen"""
+    db_vermietung = db.query(Vermietung).filter(Vermietung.id == vermietung_id).first()
+    if not db_vermietung:
         raise HTTPException(status_code=404, detail="Vermietung nicht gefunden")
     
-    # Wenn aktiv: Leihrad wieder verfügbar machen
-    if vermietung.status == 'aktiv':
-        leihrad = db.query(Leihrad).filter(Leihrad.id == vermietung.leihrad_id).first()
-        if leihrad:
+    # Rad wieder freigeben
+    if db_vermietung.leihrad_id:
+        leihrad = db.query(Leihrad).filter(Leihrad.id == db_vermietung.leihrad_id).first()
+        if leihrad and leihrad.status == LeihradStatus.verliehen:
             leihrad.status = LeihradStatus.verfuegbar
     
-    vermietung.status = 'storniert'
+    db.delete(db_vermietung)
     db.commit()
-    return {"message": "Vermietung storniert"}
+    return {"message": "Vermietung gelöscht"}
 
 
-# ========== KALENDER V2 ENDPOINTS ==========
-
-@router_vermietung.get("/verfuegbarkeit/")
-def check_verfuegbarkeit(
-    von_datum: date,
-    bis_datum: date,
-    von_zeit: Optional[str] = None,  # Format: "10:00"
-    bis_zeit: Optional[str] = None,  # Format: "18:00"
-    exclude_id: Optional[int] = None,  # Vermietung-ID die ignoriert werden soll (beim Editieren)
-    db: Session = Depends(get_db)
-):
-    """
-    Prüft Verfügbarkeit von Leihrädern für einen Zeitraum.
-    
-    Kalender V2 Feature für Doppelbuchungs-Check.
-    
-    Returns:
-        - verfuegbar: Anzahl verfügbarer Räder
-        - gesamt: Gesamt-Anzahl Räder
-        - belegt: Anzahl belegter Räder
-        - buchungen: Liste der überlappenden Buchungen
-        - kann_buchen: Boolean ob Buchung möglich
-    """
-    
-    # 1. Gesamt-Anzahl Räder ermitteln
-    gesamt_raeder = db.query(Leihrad).count()
-    
-    # 2. Überlappende Buchungen finden
-    query = db.query(Vermietung).options(
-        joinedload(Vermietung.kunde)  # ✅ WICHTIG: Kunde-Relation laden!
-    ).filter(
-        Vermietung.status.in_(['aktiv', 'reserviert']),
-        Vermietung.von_datum <= bis_datum,
-        Vermietung.bis_datum >= von_datum
-    )
-    
-    # Bei Bearbeitung: Aktuelle Vermietung ignorieren
-    if exclude_id:
-        query = query.filter(Vermietung.id != exclude_id)
-    
-    overlapping = query.all()
-    
-    # 3. Belegte Räder summieren
-    belegt = sum(v.anzahl_raeder for v in overlapping)
-    
-    # 4. Verfügbare Räder berechnen
-    verfuegbar = max(0, gesamt_raeder - belegt)
-    
-    # 5. Buchungs-Details für Frontend
-    buchungen = []
-    for v in overlapping:
-        # ✅ FIX: Kunde hat 'vorname' und 'nachname', nicht 'name'
-        buchungen.append({
-            "id": v.id,
-            "kunde_name": f"{v.kunde.vorname} {v.kunde.nachname}" if v.kunde else v.kunde_name,
-            "anzahl_raeder": v.anzahl_raeder,
-            "von": v.von_datum.isoformat(),
-            "bis": v.bis_datum.isoformat(),
-            "von_zeit": v.von_zeit.isoformat() if v.von_zeit else None,
-            "bis_zeit": v.bis_zeit.isoformat() if v.bis_zeit else None,
-            "status": v.status
-        })
-    
-    return {
-        "verfuegbar": verfuegbar,
-        "gesamt": gesamt_raeder,
-        "belegt": belegt,
-        "buchungen": buchungen,
-        "kann_buchen": verfuegbar > 0,
-        "warnung": f"Nur noch {verfuegbar} Räder verfügbar" if verfuegbar < 5 else None
-    }
-
-
-# ========== ✨ NEU: VERFÜGBARKEIT PRO TYP ==========
+# ========== ✅ FIX: VERFÜGBARKEIT PRO TYP (KOMPLETT ÜBERARBEITET) ==========
 
 @router_vermietung.get("/verfuegbarkeit-pro-typ/")
 def check_verfuegbarkeit_pro_typ(
@@ -387,25 +424,19 @@ def check_verfuegbarkeit_pro_typ(
     db: Session = Depends(get_db)
 ):
     """
-    ✨ PHASE 2: Verfügbarkeit pro Rad-Typ
+    ✅ FIXED: Verfügbarkeit pro Rad-Typ
     
-    Gibt für jeden Rad-Typ zurück:
-    - Anzahl verfügbar
-    - Anzahl gesamt
-    - Anzahl belegt (im Zeitraum, falls angegeben)
-    - Preisstaffel
-    - Ob vermietbar
-    
-    Args:
-        von_datum: Optional - Start des Zeitraums für Verfügbarkeits-Check
-        bis_datum: Optional - Ende des Zeitraums für Verfügbarkeits-Check
+    FIXES:
+    1. Gesamt = ALLE Räder (nicht nur verfügbare)
+    2. Werkstatt = vermietbar (Notfall-Räder, GRATIS)
+    3. Verfügbar = Gesamt - Belegt
+    4. MIN-Preis statt AVG
     
     Returns:
         Dict mit Rad-Typen als Keys und Verfügbarkeits-Infos als Values
     """
     
-    # 1. Alle vermietbaren Rad-Typen mit Preisen ermitteln
-    # Gruppiere nach Typ und hole einen repräsentativen Preis
+    # 1. Alle Rad-Typen mit MIN-Preisen (func.min statt func.avg!)
     typen_query = db.query(
         Leihrad.typ,
         func.count(Leihrad.id).label('gesamt'),
@@ -413,7 +444,7 @@ def check_verfuegbarkeit_pro_typ(
         func.min(Leihrad.preis_3tage).label('preis_3tage'),
         func.min(Leihrad.preis_5tage).label('preis_5tage')
     ).filter(
-        Leihrad.typ.isnot(None)  # Nur Räder mit Typ
+        Leihrad.typ.isnot(None)
     ).group_by(Leihrad.typ).all()
     
     result = {}
@@ -422,35 +453,32 @@ def check_verfuegbarkeit_pro_typ(
         typ = typ_row.typ
         gesamt = typ_row.gesamt
         
-        # 2. Verfügbare Räder dieses Typs (Status = verfuegbar)
-        verfuegbar_query = db.query(Leihrad).filter(
-            Leihrad.typ == typ,
-            Leihrad.status == LeihradStatus.verfuegbar
-        )
-        verfuegbar_count = verfuegbar_query.count()
-        
-        # 3. Belegte Räder im Zeitraum (falls Datum angegeben)
+        # 2. Belegte Räder im Zeitraum (falls Datum angegeben)
         belegt = 0
         if von_datum and bis_datum:
-            # Finde alle Vermietungen dieses Typs im Zeitraum
-            # (Wir müssen hier über leihrad_id gehen, da Vermietung keinen direkten typ hat)
-            leihrad_ids = [lr.id for lr in verfuegbar_query.all()]
+            # Hole alle Räder dieses Typs
+            raeder_ids = [lr.id for lr in db.query(Leihrad).filter(Leihrad.typ == typ).all()]
             
+            # Finde überlappende Vermietungen
             overlapping = db.query(Vermietung).filter(
-                Vermietung.leihrad_id.in_(leihrad_ids),
+                Vermietung.leihrad_id.in_(raeder_ids),
                 Vermietung.status.in_(['aktiv', 'reserviert']),
                 Vermietung.von_datum <= bis_datum,
                 Vermietung.bis_datum >= von_datum
             ).all()
             
-            belegt = len(overlapping)
+            belegt = sum(v.anzahl_raeder or 1 for v in overlapping)
         
-        # 4. Prüfe ob Typ vermietbar ist (Werkstatt = nicht vermietbar)
-        vermietbar = typ.lower() not in ['werkstatt', 'defekt']
+        # 3. ✅ FIX: Verfügbar = Gesamt - Belegt (nicht nur status=verfuegbar!)
+        verfuegbar = max(0, gesamt - belegt)
+        
+        # 4. ✅ FIX: Werkstatt = vermietbar (Notfall-Räder!)
+        # Nur "defekt" ist NICHT vermietbar
+        vermietbar = typ.lower() not in ['defekt']
         
         # 5. Erstelle Response
         typ_info = {
-            "verfuegbar": verfuegbar_count,
+            "verfuegbar": verfuegbar,
             "gesamt": gesamt,
             "belegt": belegt,
             "preis_1tag": float(typ_row.preis_1tag or 0),
@@ -459,10 +487,55 @@ def check_verfuegbarkeit_pro_typ(
             "vermietbar": vermietbar
         }
         
-        # 6. Spezielle Behandlung für Georg (Lastenrad)
+        # 6. Spezielle Labels
         if typ.lower() == 'lastenrad':
             typ_info["special"] = "GRATIS - Georg! 🎉"
+        elif typ.lower() == 'werkstatt':
+            typ_info["special"] = "Notfall-Räder - GRATIS! 🔧"
+            # ✅ Werkstatträder sind kostenlos!
+            typ_info["preis_1tag"] = 0.0
+            typ_info["preis_3tage"] = 0.0
+            typ_info["preis_5tage"] = 0.0
         
         result[typ] = typ_info
     
     return result
+
+
+# ========== VERFÜGBARKEIT ENDPOINT (GESAMT) ==========
+
+@router_vermietung.get("/verfuegbarkeit/")
+def check_verfuegbarkeit(
+    von_datum: date = Query(...),
+    bis_datum: date = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    ✅ FIXED: Gesamt-Verfügbarkeit (dynamisch!)
+    
+    NICHT MEHR hardcoded 21!
+    Berechnet dynamisch aus ALLEN vermietbaren Rädern
+    """
+    
+    # ✅ FIX: Alle VERMIETBAREN Räder zählen (nicht defekt)
+    gesamt_raeder = db.query(Leihrad).filter(
+        Leihrad.typ.notin_(['defekt'])  # Nur defekt ausschließen
+    ).count()
+    
+    # Aktive Vermietungen im Zeitraum
+    overlapping = db.query(Vermietung).filter(
+        Vermietung.status.in_(['aktiv', 'reserviert']),
+        Vermietung.von_datum <= bis_datum,
+        Vermietung.bis_datum >= von_datum
+    ).all()
+    
+    belegt = sum(v.anzahl_raeder or 1 for v in overlapping)
+    verfuegbar = max(0, gesamt_raeder - belegt)
+    
+    return {
+        "verfuegbar": verfuegbar,
+        "gesamt": gesamt_raeder,
+        "belegt": belegt,
+        "von_datum": von_datum,
+        "bis_datum": bis_datum
+    }

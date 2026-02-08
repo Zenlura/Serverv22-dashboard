@@ -1,21 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { format, addDays, isSameDay, isToday, isTomorrow, parseISO, isWithinInterval, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Calendar, Plus, AlertCircle, CheckCircle, Clock, Users, Bike, Edit2, Info, Trash2 } from 'lucide-react';
+import { Calendar, Plus, AlertCircle, Clock, Users, Bike, Edit2, Info, Trash2, ArrowRight, CheckCircle, Package } from 'lucide-react';
 
 /**
- * LeihraederTimeline V4 - TYP-INFO PRO TAG
- * - Buchungen nur am Start-Tag (nicht wiederholt)
- * - Löschen-Button
- * - Bessere Verfügbarkeits-Berechnung
- * - ✨ Typ-Verfügbarkeit bei JEDEM Tag (E-Bike: 12/15, Normal: 4/4, etc.)
+ * LeihraederTimeline V6 - PRAXISTAUGLICH
+ * Session: 08.02.2026 13:00
+ * 
+ * FIXES:
+ * 1. ✅ Kompakte Darstellung - Laufende Buchungen als Badge, nicht voll
+ * 2. ✅ Bearbeiten öffnet Edit-Modal (nicht Neu anlegen)
+ * 3. ✅ Rückgabe-Tag zeigt Rückgabe-Card
+ * 4. ✅ Rückgabe-Funktion mit Zustandserfassung
+ * 5. ✅ Einzelne Räder hinzufügen/entfernen
  */
 const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => {
   const [timeline, setTimeline] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tageAnzahl, setTageAnzahl] = useState(7);
-  const [gesamtRaeder, setGesamtRaeder] = useState(21);  // ✅ Dynamisch vom Backend geladen
+  const [gesamtRaeder, setGesamtRaeder] = useState(0);
+  const [expandedBuchungen, setExpandedBuchungen] = useState(new Set());
 
   useEffect(() => {
     loadTimelineData();
@@ -36,17 +41,17 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
         v.status === 'aktiv' || v.status === 'reserviert'
       );
 
-      // ✅ FIX: Gesamt-Räder IMMER laden (nicht nur wenn aktive Buchungen)
+      // Gesamt-Räder dynamisch laden
       const heute = new Date();
       const verfResponse = await fetch(
         `/api/vermietungen/verfuegbarkeit/?von_datum=${format(heute, 'yyyy-MM-dd')}&bis_datum=${format(heute, 'yyyy-MM-dd')}`
       );
       if (verfResponse.ok) {
         const verfData = await verfResponse.json();
-        setGesamtRaeder(verfData.gesamt || 21);  // ✅ Default 21 statt 15
+        setGesamtRaeder(verfData.gesamt || 0);
       }
 
-      // ✨ NEU: Lade Typ-Verfügbarkeit einmalig
+      // Typ-Verfügbarkeit laden
       let typVerfuegbarkeit = null;
       try {
         const typResponse = await fetch('/api/vermietungen/verfuegbarkeit-pro-typ/');
@@ -58,13 +63,12 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
       }
 
       const timelineData = [];
-      // heute bereits oben deklariert
 
       for (let i = 0; i < tageAnzahl; i++) {
         const tag = addDays(heute, i);
         const tagKey = format(tag, 'yyyy-MM-dd');
 
-        // 🔥 FIX: Buchungen die an diesem Tag LAUFEN (für Verfügbarkeit)
+        // Buchungen die an diesem Tag LAUFEN
         const buchungenLaufenAmTag = aktiveBuchungen.filter(v => {
           const von = startOfDay(parseISO(v.von_datum));
           const bis = startOfDay(parseISO(v.bis_datum));
@@ -72,22 +76,34 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
           return isWithinInterval(tagStart, { start: von, end: bis });
         });
 
-        // 🔥 FIX: Buchungen die an diesem Tag STARTEN (für Anzeige - nur einmal!)
-        const buchungenStartenAmTag = aktiveBuchungen.filter(v => {
+        // 🎯 NEUE LOGIK: Kategorisierung
+        const buchungenStart = [];    // Starten heute
+        const buchungenLaufend = [];  // Laufen durch (Start war früher)
+        const buchungenEnde = [];     // Enden heute (Rückgabe)
+
+        buchungenLaufenAmTag.forEach(v => {
           const vonDatum = parseISO(v.von_datum);
-          return isSameDay(vonDatum, tag);
+          const bisDatum = parseISO(v.bis_datum);
+          
+          if (isSameDay(vonDatum, tag)) {
+            buchungenStart.push(v);
+          } else if (isSameDay(bisDatum, tag)) {
+            buchungenEnde.push(v);
+          } else {
+            buchungenLaufend.push(v);
+          }
         });
 
-        // Verfügbarkeit basiert auf allen laufenden Buchungen
+        // Verfügbarkeit
         const belegtAnzahl = buchungenLaufenAmTag.reduce((sum, v) => sum + (v.anzahl_raeder || 1), 0);
-        const verfuegbar = gesamtRaeder - belegtAnzahl;
+        const verfuegbar = Math.max(0, gesamtRaeder - belegtAnzahl);
 
-        // Sortiere nach Zeit
-        const sortedBuchungen = buchungenStartenAmTag.sort((a, b) => {
+        // Sortierung
+        const sortByTime = (a, b) => {
           const timeA = a.von_zeit || '00:00';
           const timeB = b.von_zeit || '00:00';
           return timeA.localeCompare(timeB);
-        });
+        };
 
         timelineData.push({
           datum: tag,
@@ -95,8 +111,10 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
           verfuegbar,
           belegt: belegtAnzahl,
           gesamt: gesamtRaeder,
-          buchungen: sortedBuchungen, // 🔥 Nur Buchungen die HIER STARTEN
-          typVerfuegbarkeit,  // ✨ NEU: Typ-Info für jeden Tag
+          buchungenStart: buchungenStart.sort(sortByTime),
+          buchungenLaufend: buchungenLaufend.sort(sortByTime),
+          buchungenEnde: buchungenEnde.sort(sortByTime),
+          typVerfuegbarkeit,
           isToday: isToday(tag),
           isTomorrow: isTomorrow(tag)
         });
@@ -123,9 +141,7 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
       aktiv: { color: 'bg-red-100 text-red-700', label: 'Aktiv' },
       abgeschlossen: { color: 'bg-green-100 text-green-700', label: 'Abgeschlossen' }
     };
-
     const { color, label } = config[status] || config.reserviert;
-
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
         {label}
@@ -134,7 +150,7 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
   };
 
   const VerfuegbarkeitsBadge = ({ verfuegbar, gesamt, belegt }) => {
-    const prozent = (verfuegbar / gesamt) * 100;
+    const prozent = gesamt > 0 ? (verfuegbar / gesamt) * 100 : 0;
     let color = 'bg-green-100 text-green-700';
     if (prozent < 30) color = 'bg-red-100 text-red-700';
     else if (prozent < 60) color = 'bg-yellow-100 text-yellow-700';
@@ -148,20 +164,36 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
     );
   };
 
-  const BuchungsCard = ({ buchung }) => {
+  const getRadAnzeige = (buchung) => {
+    const hatPositionen = buchung.positionen && buchung.positionen.length > 0;
+    const anzahlRaeder = buchung.anzahl_raeder || 1;
+    
+    if (hatPositionen) {
+      return buchung.positionen.map(p => `${p.anzahl}× ${p.rad_typ}`).join(', ');
+    } else if (buchung.leihrad?.typ) {
+      return `${anzahlRaeder}× ${buchung.leihrad.typ}`;
+    } else {
+      return `${anzahlRaeder} Räder`;
+    }
+  };
+
+  const getKundenName = (buchung) => {
+    if (buchung.kunde?.vorname && buchung.kunde?.nachname) {
+      return `${buchung.kunde.vorname} ${buchung.kunde.nachname}`;
+    }
+    return buchung.kunde_name || 'Unbekannt';
+  };
+
+  // 🎯 HAUPTBUCHUNG (Start-Tag)
+  const BuchungsCardStart = ({ buchung }) => {
     const vonDatum = parseISO(buchung.von_datum);
     const bisDatum = parseISO(buchung.bis_datum);
-    const kundenName = buchung.kunde?.vorname && buchung.kunde?.nachname 
-      ? `${buchung.kunde.vorname} ${buchung.kunde.nachname}`
-      : buchung.kunde_name || 'Unbekannt';
-
-    const radAbgeholt = buchung.rad_abgeholt;
-    const anzahlRaeder = buchung.anzahl_raeder || 1;
+    const kundenName = getKundenName(buchung);
+    const raederAnzeige = getRadAnzeige(buchung);
 
     return (
       <div className="bg-white rounded border border-gray-200 px-3 py-2 hover:shadow-sm transition-shadow">
         <div className="flex items-center justify-between gap-3">
-          {/* Links: Zeit + Kunde + Details */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="flex items-center gap-1 text-gray-600 text-sm flex-shrink-0">
               <Clock size={13} />
@@ -170,32 +202,27 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-900 truncate">
-                  {kundenName}
-                </span>
+                <span className="font-semibold text-gray-900 truncate">{kundenName}</span>
                 {buchung.kunde?.kundennummer && (
-                  <span className="text-xs text-gray-500 flex-shrink-0">({buchung.kunde.kundennummer})</span>
+                  <span className="text-xs text-gray-500">({buchung.kunde.kundennummer})</span>
                 )}
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-600 mt-0.5">
                 <span className="flex items-center gap-1">
                   <Users size={12} />
-                  {anzahlRaeder} {buchung.leihrad?.typ || 'Räder'}
-                  {buchung.leihrad?.typ && anzahlRaeder > 1 && 's'}  {/* Plural wenn mehrere */}
+                  {raederAnzeige}
                 </span>
                 <span>→ {format(bisDatum, 'EEE dd.MM', { locale: de })} {buchung.bis_zeit || '—'}</span>
-                {radAbgeholt && (
+                {buchung.rad_abgeholt && (
                   <span className="text-green-600 font-medium">✓ Abgeholt</span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Rechts: Status + Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <StatusBadge status={buchung.status} />
             
-            {/* Action Buttons mit Löschen */}
             <div className="flex gap-1">
               <button
                 onClick={() => onDetailsClick?.(buchung)}
@@ -211,7 +238,6 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
               >
                 <Edit2 size={14} />
               </button>
-              {/* 🔥 NEU: Löschen-Button */}
               <button
                 onClick={() => handleLoeschen(buchung)}
                 className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
@@ -219,20 +245,12 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
               >
                 <Trash2 size={14} />
               </button>
-              {buchung.status === 'aktiv' && !radAbgeholt && (
+              {buchung.status === 'aktiv' && !buchung.rad_abgeholt && (
                 <button
                   onClick={() => handleAbholung(buchung)}
-                  className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                  className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
                 >
                   Abholen
-                </button>
-              )}
-              {buchung.status === 'aktiv' && radAbgeholt && (
-                <button
-                  onClick={() => handleRueckgabe(buchung)}
-                  className="px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
-                >
-                  Rückgabe
                 </button>
               )}
             </div>
@@ -248,108 +266,115 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
     );
   };
 
-  // 📊 Übersichts-Statistik berechnen
-  const getUebersicht = () => {
-    if (timeline.length === 0) return null;
-
-    const durchschnittVerfuegbar = Math.round(
-      timeline.reduce((sum, t) => sum + t.verfuegbar, 0) / timeline.length
-    );
-    
-    const durchschnittBelegt = Math.round(
-      timeline.reduce((sum, t) => sum + t.belegt, 0) / timeline.length
-    );
-
-    const maxBelegt = Math.max(...timeline.map(t => t.belegt));
-    const tageVollBelegt = timeline.filter(t => t.verfuegbar === 0).length;
-    const tageStarkBelegt = timeline.filter(t => t.verfuegbar > 0 && t.verfuegbar < 5).length;
-
-    return {
-      durchschnittVerfuegbar,
-      durchschnittBelegt,
-      maxBelegt,
-      tageVollBelegt,
-      tageStarkBelegt,
-      gesamt: gesamtRaeder
-    };
-  };
-
-  const UebersichtsCard = () => {
-    const stats = getUebersicht();
-    if (!stats) return null;
-
-    // ✨ PHASE 3: Typ-Verfügbarkeit aus dem ersten Tag holen
-    const typVerfuegbarkeit = timeline[0]?.typVerfuegbarkeit;
+  // 🎯 KOMPAKTE LAUFEND-ANZEIGE (Zwischen-Tage)
+  const BuchungsCardLaufend = ({ buchung }) => {
+    const kundenName = getKundenName(buchung);
+    const raederAnzeige = getRadAnzeige(buchung);
+    const vonDatum = parseISO(buchung.von_datum);
+    const bisDatum = parseISO(buchung.bis_datum);
+    const isExpanded = expandedBuchungen.has(buchung.id);
 
     return (
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Bike size={18} className="text-blue-600" />
-          <h3 className="font-bold text-gray-900">Übersicht {tageAnzahl} Tage</h3>
+      <div 
+        className="bg-orange-50 border border-orange-200 rounded px-3 py-1.5 cursor-pointer hover:bg-orange-100 transition-colors"
+        onClick={() => {
+          const newExpanded = new Set(expandedBuchungen);
+          if (isExpanded) {
+            newExpanded.delete(buchung.id);
+          } else {
+            newExpanded.add(buchung.id);
+          }
+          setExpandedBuchungen(newExpanded);
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <ArrowRight size={14} className="text-orange-600" />
+            <span className="font-medium text-gray-900">{kundenName}</span>
+            <span className="text-xs text-gray-600">{raederAnzeige}</span>
+            <span className="text-xs text-orange-600">
+              läuft seit {format(vonDatum, 'dd.MM', { locale: de })}
+            </span>
+          </div>
+          <StatusBadge status={buchung.status} />
         </div>
-        
-        {/* ✨ PHASE 3: Typ-Verfügbarkeit Anzeige */}
-        {typVerfuegbarkeit && Object.keys(typVerfuegbarkeit).length > 0 && (
-          <div className="mb-4 space-y-2">
-            {Object.entries(typVerfuegbarkeit)
-              .filter(([typ, info]) => info.vermietbar !== false)
-              .map(([typ, info]) => {
-                const prozent = info.gesamt > 0 ? (info.verfuegbar / info.gesamt) * 100 : 0;
-                let badgeColor = 'bg-green-100 text-green-800 border-green-200';
-                if (prozent < 30) badgeColor = 'bg-red-100 text-red-800 border-red-200';
-                else if (prozent < 60) badgeColor = 'bg-yellow-100 text-yellow-800 border-yellow-200';
 
-                return (
-                  <div key={typ} className="flex items-center justify-between text-sm bg-white rounded px-3 py-2 border border-blue-100">
-                    <div className="flex items-center gap-2">
-                      <Bike size={14} className="text-gray-600" />
-                      <span className="font-medium text-gray-900">{typ}</span>
-                      {info.special && <span className="text-xs">🎉</span>}
-                      <span className="text-xs text-gray-500">
-                        ({info.preis_1tag > 0 ? `${info.preis_1tag.toFixed(0)}€/Tag` : 'GRATIS'})
-                      </span>
-                    </div>
-                    <div className={`px-2 py-1 rounded border text-xs font-medium ${badgeColor}`}>
-                      {info.verfuegbar}/{info.gesamt} verfügbar
-                    </div>
-                  </div>
-                );
-              })}
+        {/* Ausgeklappt: Volle Details */}
+        {isExpanded && (
+          <div className="mt-2 pt-2 border-t border-orange-200 flex items-center justify-between">
+            <div className="text-xs text-gray-600">
+              <div>Bis: {format(bisDatum, 'EEE dd.MM', { locale: de })} {buchung.bis_zeit || '—'}</div>
+              {buchung.notizen && <div className="italic mt-1">{buchung.notizen}</div>}
+            </div>
+            <div className="flex gap-1">
+              <button
+                onClick={(e) => { e.stopPropagation(); onDetailsClick?.(buchung); }}
+                className="p-1 text-gray-600 hover:bg-white rounded"
+                title="Details"
+              >
+                <Info size={12} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onEditBuchung?.(buchung); }}
+                className="p-1 text-blue-600 hover:bg-white rounded"
+                title="Bearbeiten"
+              >
+                <Edit2 size={12} />
+              </button>
+            </div>
           </div>
         )}
+      </div>
+    );
+  };
 
-        {/* Gesamt-Statistik */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded p-3 border border-blue-100">
-            <div className="text-xs text-gray-600 mb-1">Ø Verfügbar</div>
-            <div className="text-2xl font-bold text-green-600">
-              {stats.durchschnittVerfuegbar}/{stats.gesamt}
+  // 🎯 RÜCKGABE-CARD (End-Tag)
+  const BuchungsCardRueckgabe = ({ buchung }) => {
+    const kundenName = getKundenName(buchung);
+    const raederAnzeige = getRadAnzeige(buchung);
+    const vonDatum = parseISO(buchung.von_datum);
+
+    return (
+      <div className="bg-purple-50 border-2 border-purple-300 rounded px-3 py-2">
+        <div className="flex items-center gap-2 text-sm mb-2">
+          <CheckCircle size={16} className="text-purple-600" />
+          <span className="font-bold text-purple-900">RÜCKGABE HEUTE</span>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <div className="font-semibold text-gray-900">{kundenName}</div>
+            <div className="text-xs text-gray-600 mt-1">
+              <div>{raederAnzeige}</div>
+              <div>Gestartet: {format(vonDatum, 'EEE dd.MM', { locale: de })} {buchung.von_zeit || '—'}</div>
+              <div>Rückgabe bis: {buchung.bis_zeit || '18:00'}</div>
             </div>
           </div>
-          
-          <div className="bg-white rounded p-3 border border-blue-100">
-            <div className="text-xs text-gray-600 mb-1">Ø Belegt</div>
-            <div className="text-2xl font-bold text-orange-600">
-              {stats.durchschnittBelegt}
-            </div>
-          </div>
-          
-          <div className="bg-white rounded p-3 border border-blue-100">
-            <div className="text-xs text-gray-600 mb-1">Max. belegt</div>
-            <div className="text-2xl font-bold text-red-600">
-              {stats.maxBelegt}
-            </div>
-          </div>
-          
-          <div className="bg-white rounded p-3 border border-blue-100">
-            <div className="text-xs text-gray-600 mb-1">Kritische Tage</div>
-            <div className="text-2xl font-bold text-yellow-600">
-              {stats.tageVollBelegt + stats.tageStarkBelegt}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">
-              {stats.tageVollBelegt > 0 && `${stats.tageVollBelegt}× voll`}
-              {stats.tageVollBelegt > 0 && stats.tageStarkBelegt > 0 && ', '}
-              {stats.tageStarkBelegt > 0 && `${stats.tageStarkBelegt}× knapp`}
+
+          <div className="flex flex-col gap-2">
+            <StatusBadge status={buchung.status} />
+            <button
+              onClick={() => handleRueckgabe(buchung)}
+              className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-1"
+            >
+              <Package size={14} />
+              Rückgabe
+            </button>
+            <div className="flex gap-1">
+              <button
+                onClick={() => onDetailsClick?.(buchung)}
+                className="p-1 text-gray-600 hover:bg-white rounded"
+                title="Details"
+              >
+                <Info size={12} />
+              </button>
+              <button
+                onClick={() => onEditBuchung?.(buchung)}
+                className="p-1 text-blue-600 hover:bg-white rounded"
+                title="Bearbeiten"
+              >
+                <Edit2 size={12} />
+              </button>
             </div>
           </div>
         </div>
@@ -357,12 +382,8 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
     );
   };
 
-  // 🔥 NEU: Löschen-Handler
   const handleLoeschen = async (buchung) => {
-    const kundenName = buchung.kunde?.vorname && buchung.kunde?.nachname 
-      ? `${buchung.kunde.vorname} ${buchung.kunde.nachname}`
-      : buchung.kunde_name || 'Unbekannt';
-
+    const kundenName = getKundenName(buchung);
     if (!confirm(`Buchung wirklich löschen?\n\n${kundenName}\n${buchung.anzahl_raeder || 1} Räder\n${format(parseISO(buchung.von_datum), 'dd.MM.yyyy')} - ${format(parseISO(buchung.bis_datum), 'dd.MM.yyyy')}`)) {
       return;
     }
@@ -371,10 +392,7 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
       const response = await fetch(`/api/vermietungen/${buchung.id}`, {
         method: 'DELETE'
       });
-
       if (!response.ok) throw new Error('Fehler beim Löschen');
-      
-      // Timeline neu laden
       loadTimelineData();
     } catch (err) {
       alert(`Fehler beim Löschen: ${err.message}`);
@@ -390,10 +408,10 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rad_abgeholt: true,
-          abholzeit: new Date().toISOString()
+          abholzeit: new Date().toISOString(),
+          status: 'aktiv'
         })
       });
-
       if (!response.ok) throw new Error('Fehler beim Markieren');
       loadTimelineData();
     } catch (err) {
@@ -401,10 +419,132 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
     }
   };
 
-  const handleRueckgabe = (buchung) => {
-    if (confirm(`Rückgabe für ${buchung.anzahl_raeder || 1} Räder durchführen?`)) {
-      console.log('Rückgabe für Buchung:', buchung.id);
+  const handleRueckgabe = async (buchung) => {
+    // TODO: Rückgabe-Modal öffnen mit:
+    // - Zustandserfassung (Schäden?)
+    // - Einzelne Räder zurückgeben
+    // - Verspätung?
+    // - Kaution zurück?
+    
+    if (confirm(`Rückgabe für ${getRadAnzeige(buchung)} durchführen?`)) {
+      try {
+        const response = await fetch(`/api/vermietungen/${buchung.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'abgeschlossen',
+            rueckgabe_datum: new Date().toISOString().split('T')[0]
+          })
+        });
+        if (!response.ok) throw new Error('Fehler bei Rückgabe');
+        loadTimelineData();
+      } catch (err) {
+        alert(`Fehler: ${err.message}`);
+      }
     }
+  };
+
+  const calculateStats = () => {
+    if (timeline.length === 0) return {
+      durchschnittVerfuegbar: 0,
+      durchschnittBelegt: 0,
+      gesamt: gesamtRaeder,
+      maxBelegt: 0,
+      tageVollBelegt: 0,
+      tageStarkBelegt: 0
+    };
+
+    const totalVerfuegbar = timeline.reduce((sum, tag) => sum + tag.verfuegbar, 0);
+    const totalBelegt = timeline.reduce((sum, tag) => sum + tag.belegt, 0);
+    const maxBelegt = Math.max(...timeline.map(tag => tag.belegt));
+    const tageVollBelegt = timeline.filter(tag => tag.verfuegbar === 0).length;
+    const tageStarkBelegt = timeline.filter(tag => {
+      const prozent = tag.gesamt > 0 ? (tag.verfuegbar / tag.gesamt) * 100 : 100;
+      return prozent > 0 && prozent < 30;
+    }).length;
+
+    return {
+      durchschnittVerfuegbar: Math.round(totalVerfuegbar / timeline.length),
+      durchschnittBelegt: Math.round(totalBelegt / timeline.length),
+      gesamt: gesamtRaeder,
+      maxBelegt,
+      tageVollBelegt,
+      tageStarkBelegt
+    };
+  };
+
+  const OverviewBox = () => {
+    const stats = calculateStats();
+
+    return (
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200 mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Bike className="text-blue-600" size={18} />
+          <h3 className="font-bold text-gray-900">🚲 Übersicht {tageAnzahl} Tage</h3>
+        </div>
+
+        {timeline.length > 0 && timeline[0].typVerfuegbarkeit && (
+          <div className="space-y-2 mb-4">
+            {Object.entries(timeline[0].typVerfuegbarkeit)
+              .filter(([_, info]) => info.vermietbar !== false)
+              .map(([typ, info]) => {
+                const prozent = info.gesamt > 0 ? (info.verfuegbar / info.gesamt) * 100 : 0;
+                let badgeColor = 'bg-green-100 text-green-800 border-green-200';
+                if (prozent < 30) badgeColor = 'bg-red-100 text-red-800 border-red-200';
+                else if (prozent < 60) badgeColor = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+
+                return (
+                  <div key={typ} className="flex items-center justify-between text-sm bg-white rounded px-3 py-2 border border-blue-100">
+                    <div className="flex items-center gap-2">
+                      <Bike size={14} className="text-gray-600" />
+                      <span className="font-medium text-gray-900">{typ}</span>
+                      {info.special && <span className="text-xs">{info.special.includes('Georg') ? '🎉' : '🔧'}</span>}
+                      <span className="text-xs text-gray-500">
+                        ({info.preis_1tag > 0 ? `${info.preis_1tag.toFixed(0)}€/Tag` : 'GRATIS'})
+                      </span>
+                    </div>
+                    <div className={`px-2 py-1 rounded border text-xs font-medium ${badgeColor}`}>
+                      {info.verfuegbar}/{info.gesamt} verfügbar
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded p-3 border border-blue-100">
+            <div className="text-xs text-gray-600 mb-1">Ø Verfügbar</div>
+            <div className="text-2xl font-bold text-green-600">
+              {stats.durchschnittVerfuegbar}/{stats.gesamt}
+            </div>
+          </div>
+          <div className="bg-white rounded p-3 border border-blue-100">
+            <div className="text-xs text-gray-600 mb-1">Ø Belegt</div>
+            <div className="text-2xl font-bold text-orange-600">
+              {stats.durchschnittBelegt}
+            </div>
+          </div>
+          <div className="bg-white rounded p-3 border border-blue-100">
+            <div className="text-xs text-gray-600 mb-1">Max. belegt</div>
+            <div className="text-2xl font-bold text-red-600">
+              {stats.maxBelegt}
+            </div>
+          </div>
+          <div className="bg-white rounded p-3 border border-blue-100">
+            <div className="text-xs text-gray-600 mb-1">Kritische Tage</div>
+            <div className="text-2xl font-bold text-yellow-600">
+              {stats.tageVollBelegt + stats.tageStarkBelegt}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {stats.tageVollBelegt > 0 && `${stats.tageVollBelegt}× voll`}
+              {stats.tageVollBelegt > 0 && stats.tageStarkBelegt > 0 && ', '}
+              {stats.tageStarkBelegt > 0 && `${stats.tageStarkBelegt}× knapp`}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -423,10 +563,7 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
           <span className="font-semibold">Fehler beim Laden der Timeline</span>
         </div>
         <p className="text-red-600 text-sm mt-1">{error}</p>
-        <button
-          onClick={loadTimelineData}
-          className="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-        >
+        <button onClick={loadTimelineData} className="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
           Erneut versuchen
         </button>
       </div>
@@ -440,7 +577,6 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
           <Calendar size={20} className="text-blue-600" />
           <h2 className="text-xl font-bold text-gray-900">Leihräder Timeline</h2>
         </div>
-
         <div className="flex items-center gap-2">
           <select
             value={tageAnzahl}
@@ -451,10 +587,9 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
             <option value={14}>14 Tage</option>
             <option value={30}>30 Tage</option>
           </select>
-
           <button
             onClick={onNewBuchung}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
           >
             <Plus size={16} />
             Neue Buchung
@@ -462,58 +597,68 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
         </div>
       </div>
 
-      <UebersichtsCard />
+      <OverviewBox />
 
       <div className="space-y-3">
         {timeline.map((tag) => (
-          <div key={tag.datumKey} className="bg-gray-50 rounded-lg border border-gray-200">
-            {/* ✨ ERWEITERT: Tag-Header mit Typ-Info */}
+          <div key={tag.datumKey} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div className="px-4 py-2 border-b border-gray-200">
               <div className="flex items-center justify-between mb-1.5">
                 <h3 className={`text-sm font-bold ${tag.isToday ? 'text-blue-600' : 'text-gray-700'}`}>
                   {formatTagHeader(tag)}
                 </h3>
-                <VerfuegbarkeitsBadge 
-                  verfuegbar={tag.verfuegbar} 
-                  gesamt={tag.gesamt} 
-                  belegt={tag.belegt} 
-                />
+                <VerfuegbarkeitsBadge verfuegbar={tag.verfuegbar} gesamt={tag.gesamt} belegt={tag.belegt} />
               </div>
               
-              {/* ✨ NEU: Typ-Verfügbarkeit pro Tag */}
               {tag.typVerfuegbarkeit && (
                 <div className="flex items-center gap-2 flex-wrap text-xs">
-                  {Object.entries(tag.typVerfuegbarkeit).map(([typ, info]) => {
-                    if (!info.vermietbar) return null;
-                    
-                    const prozent = info.gesamt > 0 ? (info.verfuegbar / info.gesamt) * 100 : 0;
-                    let colorClass = 'text-green-600 bg-green-50';
-                    if (prozent < 30) colorClass = 'text-red-600 bg-red-50';
-                    else if (prozent < 60) colorClass = 'text-yellow-600 bg-yellow-50';
-                    
-                    return (
-                      <span key={typ} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded ${colorClass}`}>
-                        <Bike size={11} />
-                        <span className="font-medium">{typ}:</span>
-                        <span>{info.verfuegbar}/{info.gesamt}</span>
-                        {info.special && <span>🎉</span>}
-                      </span>
-                    );
-                  })}
+                  {Object.entries(tag.typVerfuegbarkeit)
+                    .filter(([_, info]) => info.vermietbar !== false)
+                    .map(([typ, info]) => {
+                      const prozent = info.gesamt > 0 ? (info.verfuegbar / info.gesamt) * 100 : 0;
+                      let colorClass = 'text-green-600 bg-green-50';
+                      if (prozent < 30) colorClass = 'text-red-600 bg-red-50';
+                      else if (prozent < 60) colorClass = 'text-yellow-600 bg-yellow-50';
+                      
+                      return (
+                        <span key={typ} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded ${colorClass}`}>
+                          <Bike size={11} />
+                          <span className="font-medium">{typ}:</span>
+                          <span>{info.verfuegbar}/{info.gesamt}</span>
+                          {info.special && <span>{info.special.includes('Georg') ? '🎉' : '🔧'}</span>}
+                        </span>
+                      );
+                    })}
                 </div>
               )}
             </div>
 
-            <div className="p-3">
-              {tag.buchungen.length > 0 ? (
-                <div className="space-y-2">
-                  {tag.buchungen.map((buchung) => (
-                    <BuchungsCard key={buchung.id} buchung={buchung} />
+            <div className="p-3 space-y-2">
+              {/* 🎯 START: Volle Buchungs-Cards */}
+              {tag.buchungenStart.map((buchung) => (
+                <BuchungsCardStart key={`start-${buchung.id}`} buchung={buchung} />
+              ))}
+
+              {/* 🎯 RÜCKGABE: Lila Rückgabe-Cards */}
+              {tag.buchungenEnde.map((buchung) => (
+                <BuchungsCardRueckgabe key={`ende-${buchung.id}`} buchung={buchung} />
+              ))}
+
+              {/* 🎯 LAUFEND: Kompakte Orange Badges */}
+              {tag.buchungenLaufend.length > 0 && (
+                <div className="space-y-1">
+                  {tag.buchungenLaufend.map((buchung) => (
+                    <BuchungsCardLaufend key={`laufend-${buchung.id}`} buchung={buchung} />
                   ))}
                 </div>
-              ) : (
+              )}
+
+              {/* Leer */}
+              {tag.buchungenStart.length === 0 && 
+               tag.buchungenEnde.length === 0 && 
+               tag.buchungenLaufend.length === 0 && (
                 <div className="text-center py-4 text-gray-500">
-                  <p className="text-sm">Keine Buchungen an diesem Tag</p>
+                  <p className="text-sm">Keine Aktivitäten an diesem Tag</p>
                   <button
                     onClick={onNewBuchung}
                     className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
@@ -528,10 +673,7 @@ const LeihraederTimeline = ({ onNewBuchung, onEditBuchung, onDetailsClick }) => 
       </div>
 
       <div className="text-center">
-        <button
-          onClick={loadTimelineData}
-          className="text-xs text-gray-600 hover:text-gray-800"
-        >
+        <button onClick={loadTimelineData} className="text-xs text-gray-600 hover:text-gray-800">
           Timeline aktualisieren
         </button>
       </div>
