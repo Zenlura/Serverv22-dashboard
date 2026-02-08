@@ -1,115 +1,171 @@
 """
 Bestellung Schemas
-Pydantic Models für API
+Pydantic Models für API-Validierung
 """
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Any
+from pydantic import BaseModel, Field
+from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
 
 
-# ==================== BestellPosition Schemas ====================
+# ============================================================================
+# BestellPosition Schemas
+# ============================================================================
 
 class BestellPositionBase(BaseModel):
-    """Basis-Schema für BestellPosition"""
-    artikel_id: int
-    menge: int = Field(gt=0)
-    einzelpreis: Decimal = Field(ge=0)
+    """Basis-Daten für BestellPosition"""
+    artikel_id: Optional[int] = Field(None, description="Artikel aus Inventar (optional)")
+    artikelnummer: str = Field(..., min_length=1, max_length=100, description="Lieferanten-Artikelnummer")
+    beschreibung: str = Field(..., min_length=1, description="Was ist es?")
+    
+    # ETRTO-Support für Reifen/Schläuche
+    etrto: Optional[str] = Field(None, max_length=20, description="ETRTO (z.B. 37-622)")
+    zoll_info: Optional[str] = Field(None, max_length=50, description="Zoll-Info (z.B. 28 x 1.40)")
+    
+    # Mengen & Preise
+    menge_bestellt: int = Field(..., ge=1, description="Bestellmenge")
+    einkaufspreis: Decimal = Field(..., ge=0, description="EK pro Stück")
+    verkaufspreis: Decimal = Field(..., ge=0, description="VK pro Stück")
+    
+    # Notizen
     notizen: Optional[str] = None
 
 
 class BestellPositionCreate(BestellPositionBase):
-    """Schema zum Erstellen einer Position"""
+    """Neue Position erstellen"""
     pass
 
 
+class BestellPositionUpdate(BaseModel):
+    """Position aktualisieren (alle Felder optional)"""
+    artikel_id: Optional[int] = None
+    artikelnummer: Optional[str] = Field(None, max_length=100)
+    beschreibung: Optional[str] = None
+    etrto: Optional[str] = Field(None, max_length=20)
+    zoll_info: Optional[str] = Field(None, max_length=50)
+    menge_bestellt: Optional[int] = Field(None, ge=1)
+    einkaufspreis: Optional[Decimal] = Field(None, ge=0)
+    verkaufspreis: Optional[Decimal] = Field(None, ge=0)
+    notizen: Optional[str] = None
+
+
+class WareneingangCreate(BaseModel):
+    """Wareneingang erfassen"""
+    menge: int = Field(..., ge=1, description="Gelieferte Menge")
+
+
 class BestellPositionResponse(BestellPositionBase):
-    """Schema für API-Response mit allen Feldern"""
+    """Position mit berechneten Feldern"""
     id: int
     bestellung_id: int
-    gesamtpreis: Decimal
+    
+    # Mengen
     menge_geliefert: int
-    geliefert: bool
-    created_at: datetime
+    menge_offen: int  # Berechnet
     
-    # Nested Artikel-Info
-    artikel: Optional[Any] = None
+    # Summen
+    summe_ek: Optional[Decimal] = None
+    summe_vk: Optional[Decimal] = None
     
-    model_config = ConfigDict(from_attributes=True)
+    # Status
+    vollstaendig_geliefert: bool
+    lieferstatus_prozent: int  # Berechnet
+    zuletzt_geliefert_am: Optional[datetime] = None
+    
+    # Timestamps
+    erstellt_am: datetime
+    
+    # Artikel-Details (wenn verknüpft)
+    artikel: Optional[dict] = None
+    
+    class Config:
+        from_attributes = True
 
 
-# ==================== Bestellung Schemas ====================
+# ============================================================================
+# Bestellung Schemas
+# ============================================================================
 
 class BestellungBase(BaseModel):
-    """Basis-Schema für Bestellung"""
-    lieferant_id: int
+    """Basis-Daten für Bestellung"""
+    lieferant_id: int = Field(..., description="Lieferant-ID")
     notizen: Optional[str] = None
-    interne_notizen: Optional[str] = None
-    versandkosten: Optional[Decimal] = Field(default=Decimal("0.0"), ge=0)
 
 
 class BestellungCreate(BestellungBase):
-    """Schema zum Erstellen einer Bestellung"""
-    positionen: List[BestellPositionCreate] = Field(min_length=1)
+    """Neue Bestellung erstellen"""
+    bestellnummer: Optional[str] = Field(None, max_length=50, description="Wenn None → Auto-Generate")
+    positionen: List[BestellPositionCreate] = Field(default=[], description="Initiale Positionen (optional)")
 
 
 class BestellungUpdate(BaseModel):
-    """Schema zum Aktualisieren einer Bestellung"""
-    status: Optional[str] = None
-    bestelldatum: Optional[datetime] = None
-    lieferdatum_erwartet: Optional[datetime] = None
-    lieferdatum_tatsaechlich: Optional[datetime] = None
+    """Bestellung aktualisieren"""
+    lieferant_id: Optional[int] = None
     notizen: Optional[str] = None
-    interne_notizen: Optional[str] = None
-    versandkosten: Optional[Decimal] = None
+
 
 class BestellungStatusUpdate(BaseModel):
-    """Schema für Status-Änderung"""
-    status: str  # "entwurf", "bestellt", "teilgeliefert", "geliefert", "storniert"
-
-
-class BestellPositionUpdate(BaseModel):
-    """Schema zum Aktualisieren einer Position"""
-    menge: Optional[int] = Field(default=None, gt=0)
-    einzelpreis: Optional[Decimal] = Field(default=None, ge=0)
-    notizen: Optional[str] = None
-    menge_geliefert: Optional[int] = Field(default=None, ge=0)
+    """Status ändern"""
+    status: str = Field(
+        ..., 
+        pattern="^(offen|bestellt|teilweise_geliefert|geliefert|abgeschlossen)$",
+        description="Status: offen, bestellt, teilweise_geliefert, geliefert, abgeschlossen"
+    )
 
 
 class BestellungResponse(BestellungBase):
-    """Schema für API-Response mit allen Feldern"""
+    """Vollständige Bestellung mit allen Details"""
     id: int
     bestellnummer: str
     status: str
-    bestelldatum: Optional[datetime] = None
-    lieferdatum_erwartet: Optional[datetime] = None
-    lieferdatum_tatsaechlich: Optional[datetime] = None
-    gesamtpreis: Decimal
-    created_at: datetime
-    updated_at: Optional[datetime] = None
     
-    # Nested Relations
-    lieferant: Optional[Any] = None
+    # Summen
+    gesamtsumme_ek: Optional[Decimal] = None
+    gesamtsumme_vk: Optional[Decimal] = None
+    
+    # Termine
+    erstellt_am: datetime
+    bestellt_am: Optional[datetime] = None
+    geliefert_am: Optional[datetime] = None
+    abgeschlossen_am: Optional[datetime] = None
+    updated_at: datetime
+    
+    # Bearbeiter
+    erstellt_von: Optional[str] = None
+    bestellt_von: Optional[str] = None
+    
+    # Berechnete Felder
+    anzahl_positionen: int
+    positionen_offen: int
+    lieferstatus_prozent: int
+    
+    # Relationships
+    lieferant: Optional[dict] = None  # Lieferant-Daten
     positionen: List[BestellPositionResponse] = []
     
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 
 
 class BestellungListItem(BaseModel):
-    """Vereinfachtes Schema für Listen-Ansicht"""
+    """Vereinfachte Darstellung für Listen"""
     id: int
     bestellnummer: str
     status: str
+    
+    # Lieferant
     lieferant_id: int
-    gesamtpreis: Decimal
-    bestelldatum: Optional[datetime] = None
-    lieferdatum_erwartet: Optional[datetime] = None
-    created_at: datetime
+    lieferant: Optional[dict] = None  # {id, name, kurzname}
     
-    # Nested Lieferant-Info (nur Name)
-    lieferant: Optional[Any] = None
+    # Summen
+    gesamtsumme_ek: Optional[Decimal] = None
+    anzahl_positionen: int
+    positionen_offen: int
+    lieferstatus_prozent: int
     
-    # Anzahl Positionen
-    anzahl_positionen: Optional[int] = None
+    # Termine
+    erstellt_am: datetime
+    bestellt_am: Optional[datetime] = None
     
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True

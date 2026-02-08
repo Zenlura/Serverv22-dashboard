@@ -637,6 +637,13 @@ export default function ReparaturBearbeitenModal({ reparatur, onClose, onSuccess
               Abbrechen
             </button>
             <button
+              type="button"
+              onClick={() => window.open(`/api/reparaturen/${reparatur.id}/print`, '_blank')}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold flex items-center gap-2"
+            >
+              🖨️ Drucken
+            </button>
+            <button
               onClick={handleSubmit}
               disabled={loading}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-50"

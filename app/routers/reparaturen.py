@@ -2,6 +2,7 @@
 Reparaturen API Endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
@@ -20,6 +21,7 @@ from app.schemas.reparatur import (
     ReparaturPositionCreate,
     ReparaturPositionUpdate
 )
+from app.utils.pdf_generator import generate_auftragszettel_pdf
 
 router = APIRouter(prefix="/api/reparaturen", tags=["Reparaturen"])
 
@@ -252,6 +254,51 @@ def delete_reparatur(
     db.commit()
     
     return {"message": "Reparatur gelöscht"}
+
+
+@router.get("/{reparatur_id}/print")
+def print_auftragszettel(
+    reparatur_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    PDF-Download für Auftragszettel
+    
+    Generiert PDF mit 2 identischen Zetteln auf einer A4-Seite (Querformat)
+    - Vorderseite: 2x Auftragsdetails
+    - Rückseite: Notizen-Linien
+    
+    Args:
+        reparatur_id: ID der Reparatur
+        
+    Returns:
+        PDF als StreamingResponse
+        
+    Raises:
+        404: Wenn Reparatur nicht gefunden
+        500: Bei PDF-Generierungs-Fehler
+    """
+    try:
+        pdf_buffer = generate_auftragszettel_pdf(reparatur_id, db)
+        
+        # Dateiname mit Auftragsnummer
+        rep = db.query(Reparatur).filter(Reparatur.id == reparatur_id).first()
+        filename = f"Auftrag_{rep.auftragsnummer if rep else reparatur_id}.pdf"
+        
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename={filename}"
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fehler beim Erstellen des PDFs: {str(e)}"
+        )
 
 
 # ============================================================================

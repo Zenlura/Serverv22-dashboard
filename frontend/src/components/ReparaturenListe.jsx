@@ -100,6 +100,12 @@ export default function ReparaturenListe() {
     }
   }
 
+  const handlePrint = (id) => {
+    // PDF in neuem Tab öffnen
+    const url = `/api/reparaturen/${id}/print`
+    window.open(url, '_blank')
+  }
+
   // Filter (erweitert für neue Kunden-Felder)
   const filteredReparaturen = reparaturen.filter(rep => {
     const matchesStatus = statusFilter === 'alle' || rep.status === statusFilter
@@ -369,6 +375,13 @@ export default function ReparaturenListe() {
                       {/* Aktionen */}
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => handlePrint(rep.id)}
+                            className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-medium"
+                            title="Auftragszettel drucken"
+                          >
+                            🖨️
+                          </button>
                           <button
                             onClick={() => setSelectedReparatur(rep)}
                             className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-medium"
