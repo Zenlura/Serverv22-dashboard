@@ -23,10 +23,13 @@ class Reparatur(Base):
     # Fahrrad Status
     fahrrad_anwesend = Column(Boolean, default=False)  # IST DAS FAHRRAD DA? ✅
     
-    # Kunden-Daten (alle optional - Datenschutz!)
-    kunde_name = Column(String(200), nullable=True)
-    kunde_telefon = Column(String(50), nullable=True)
-    kunde_email = Column(String(200), nullable=True)
+    # Kunden-Verknüpfung (NEU - Kundendatenbank)
+    kunde_id = Column(Integer, ForeignKey("kunden.id"), nullable=True, index=True)
+    
+    # Legacy: Alte Freitext-Felder (für alte Reparaturen ODER Einmalkunden)
+    kunde_name_legacy = Column(String(200), nullable=True)
+    kunde_telefon_legacy = Column(String(50), nullable=True)
+    kunde_email_legacy = Column(String(200), nullable=True)
     
     # Reparatur-Details
     maengelbeschreibung = Column(Text, nullable=False)  # Was ist kaputt?
@@ -60,6 +63,7 @@ class Reparatur(Base):
     
     # Beziehungen
     positionen = relationship("ReparaturPosition", back_populates="reparatur", cascade="all, delete-orphan")
+    kunde = relationship("Kunde", foreign_keys=[kunde_id])  # Verknüpfung zur Kundendatenbank
     
     def __repr__(self):
         return f"<Reparatur {self.auftragsnummer}: {self.fahrradmarke} - {self.status}>"

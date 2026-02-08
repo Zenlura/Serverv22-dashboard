@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import KundenAutocomplete from './KundenAutocomplete'
+import KundenModal from './KundenModal'
 
 export default function ReparaturErstellenModal({ onClose, onSuccess }) {
   const [formData, setFormData] = useState({
@@ -9,10 +11,11 @@ export default function ReparaturErstellenModal({ onClose, onSuccess }) {
     schluesselnummer: '',
     fahrrad_anwesend: false,
 
-    // Kunde
-    kunde_name: '',
-    kunde_telefon: '',
-    kunde_email: '',
+    // Kunde (NEU)
+    kunde_id: null,  // Aus Datenbank
+    kunde_name: '',  // Freitext-Fallback
+    kunde_telefon: '',  // Freitext-Fallback
+    kunde_email: '',  // Freitext-Fallback
 
     // Reparatur
     maengelbeschreibung: '',
@@ -24,12 +27,32 @@ export default function ReparaturErstellenModal({ onClose, onSuccess }) {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [kundenModalOpen, setKundenModalOpen] = useState(false)
+  const [useLegacy, setUseLegacy] = useState(false)  // Freitext-Modus
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
+    }))
+  }
+
+  const handleKundeSelect = (kunde) => {
+    setFormData(prev => ({
+      ...prev,
+      kunde_id: kunde.id,
+      kunde_name: '',  // Freitext löschen
+      kunde_telefon: '',
+      kunde_email: ''
+    }))
+    setUseLegacy(false)
+  }
+
+  const handleKundeClear = () => {
+    setFormData(prev => ({
+      ...prev,
+      kunde_id: null
     }))
   }
 
@@ -78,11 +101,11 @@ export default function ReparaturErstellenModal({ onClose, onSuccess }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900">🔧 Neue Reparatur</h2>
+        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
+          <h2 className="text-2xl font-bold text-gray-800">✏️ Neue Reparatur</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl"
+            className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
           >
             ×
           </button>
@@ -90,9 +113,8 @@ export default function ReparaturErstellenModal({ onClose, onSuccess }) {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Error */}
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
               {error}
             </div>
           )}
@@ -175,52 +197,81 @@ export default function ReparaturErstellenModal({ onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Kunden-Daten */}
+          {/* Kunden-Daten (NEU) */}
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-green-900 mb-4">👤 Kunden-Daten</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  name="kunde_name"
-                  value={formData.kunde_name}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-                  placeholder="Max Mustermann"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Telefon
-                </label>
-                <input
-                  type="tel"
-                  name="kunde_telefon"
-                  value={formData.kunde_telefon}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-                  placeholder="0123 456789"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  E-Mail
-                </label>
-                <input
-                  type="email"
-                  name="kunde_email"
-                  value={formData.kunde_email}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-                  placeholder="max@example.com"
-                />
-              </div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-green-900">👤 Kunden-Daten</h3>
+              <button
+                type="button"
+                onClick={() => setUseLegacy(!useLegacy)}
+                className="text-sm text-green-600 hover:text-green-700 underline"
+              >
+                {useLegacy ? '→ Kunde aus Datenbank' : '→ Freitext-Eingabe'}
+              </button>
             </div>
+
+            {useLegacy ? (
+              /* Freitext-Modus (Einmalkunden) */
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    name="kunde_name"
+                    value={formData.kunde_name}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                    placeholder="Max Mustermann"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Telefon
+                  </label>
+                  <input
+                    type="tel"
+                    name="kunde_telefon"
+                    value={formData.kunde_telefon}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                    placeholder="0123 456789"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    E-Mail
+                  </label>
+                  <input
+                    type="email"
+                    name="kunde_email"
+                    value={formData.kunde_email}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                    placeholder="max@example.com"
+                  />
+                </div>
+              </div>
+            ) : (
+              /* Kunden-Autocomplete (Standard) */
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Kunde auswählen
+                </label>
+                <KundenAutocomplete
+                  value={formData.kunde_id}
+                  onSelect={handleKundeSelect}
+                  onClear={handleKundeClear}
+                  onNewCustomer={() => setKundenModalOpen(true)}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Tipp: Kunde nicht gefunden? Klick auf "Neuen Kunde anlegen"
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Reparatur-Daten */}
@@ -238,11 +289,11 @@ export default function ReparaturErstellenModal({ onClose, onSuccess }) {
                   required
                   rows="3"
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"
-                  placeholder="Bremse schleift, Kette springt, Plattfuß vorne..."
+                  placeholder="Was ist kaputt? Was soll gemacht werden?"
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Status
@@ -257,14 +308,12 @@ export default function ReparaturErstellenModal({ onClose, onSuccess }) {
                     <option value="in_arbeit">In Arbeit</option>
                     <option value="wartet_auf_teile">Wartet auf Teile</option>
                     <option value="fertig">Fertig</option>
-                    <option value="abgeholt">Abgeholt</option>
-                    <option value="storniert">Storniert</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Fertig bis (optional)
+                    Fertig bis
                   </label>
                   <input
                     type="date"
@@ -275,17 +324,16 @@ export default function ReparaturErstellenModal({ onClose, onSuccess }) {
                   />
                 </div>
 
-                <div>
+                <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Kostenvoranschlag (€)
                   </label>
                   <input
                     type="number"
+                    step="0.01"
                     name="kostenvoranschlag"
                     value={formData.kostenvoranschlag}
                     onChange={handleChange}
-                    step="0.01"
-                    min="0"
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"
                     placeholder="0.00"
                   />
@@ -300,33 +348,45 @@ export default function ReparaturErstellenModal({ onClose, onSuccess }) {
                   name="notizen"
                   value={formData.notizen}
                   onChange={handleChange}
-                  rows="2"
+                  rows="3"
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"
-                  placeholder="Zusätzliche Informationen..."
+                  placeholder="Interne Notizen..."
                 />
               </div>
             </div>
           </div>
 
           {/* Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <div className="flex gap-3 justify-end pt-4 border-t">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+              className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
             >
               Abbrechen
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-50"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
               {loading ? 'Erstelle...' : 'Reparatur erstellen'}
             </button>
           </div>
         </form>
       </div>
+
+      {/* Kunden-Modal (zum Anlegen neuer Kunden) */}
+      {kundenModalOpen && (
+        <KundenModal
+          onClose={() => setKundenModalOpen(false)}
+          onSuccess={(neuerKunde) => {
+            setKundenModalOpen(false)
+            // Neuen Kunde direkt auswählen
+            handleKundeSelect(neuerKunde)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -74,9 +74,11 @@ def create_reparatur(
         rahmennummer=reparatur.rahmennummer,
         schluesselnummer=reparatur.schluesselnummer,
         fahrrad_anwesend=reparatur.fahrrad_anwesend,
-        kunde_name=reparatur.kunde_name,
-        kunde_telefon=reparatur.kunde_telefon,
-        kunde_email=reparatur.kunde_email,
+        # NEU: Kunde aus Datenbank ODER Legacy-Freitext
+        kunde_id=reparatur.kunde_id if hasattr(reparatur, 'kunde_id') else None,
+        kunde_name_legacy=reparatur.kunde_name if hasattr(reparatur, 'kunde_name') else None,
+        kunde_telefon_legacy=reparatur.kunde_telefon if hasattr(reparatur, 'kunde_telefon') else None,
+        kunde_email_legacy=reparatur.kunde_email if hasattr(reparatur, 'kunde_email') else None,
         maengelbeschreibung=reparatur.maengelbeschreibung,
         status=reparatur.status,
         fertig_bis=reparatur.fertig_bis,
@@ -123,7 +125,8 @@ def get_reparaturen(
     db: Session = Depends(get_db)
 ):
     """Liste aller Reparaturen mit Filter und Suche"""
-    query = db.query(Reparatur)
+    # WICHTIG: joinedload lädt Kunde mit (Eager Loading)
+    query = db.query(Reparatur).options(joinedload(Reparatur.kunde))
     
     # Status Filter
     if status:
@@ -135,7 +138,7 @@ def get_reparaturen(
         query = query.filter(
             (Reparatur.auftragsnummer.ilike(search_term)) |
             (Reparatur.fahrradmarke.ilike(search_term)) |
-            (Reparatur.kunde_name.ilike(search_term)) |
+            (Reparatur.kunde_name_legacy.ilike(search_term)) |  # Legacy statt kunde_name
             (Reparatur.maengelbeschreibung.ilike(search_term))
         )
     
@@ -167,9 +170,9 @@ def get_reparatur(
     db: Session = Depends(get_db)
 ):
     """Einzelne Reparatur mit allen Details"""
-    # WICHTIG: joinedload lädt Positionen mit (Eager Loading)
+    # WICHTIG: joinedload lädt Positionen UND Kunde mit (Eager Loading)
     reparatur = db.query(Reparatur)\
-        .options(joinedload(Reparatur.positionen))\
+        .options(joinedload(Reparatur.positionen), joinedload(Reparatur.kunde))\
         .filter(Reparatur.id == reparatur_id)\
         .first()
     

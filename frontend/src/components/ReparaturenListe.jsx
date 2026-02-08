@@ -3,6 +3,31 @@ import ReparaturErstellenModal from './ReparaturErstellenModal'
 import ReparaturBearbeitenModal from './ReparaturBearbeitenModal'
 import Toast from './Toast'
 
+// ===== HELPER FUNCTIONS =====
+// Kunden-Name aus DB oder Legacy
+const getKundenName = (rep) => {
+  if (rep.kunde) {
+    return `${rep.kunde.vorname || ''} ${rep.kunde.nachname || ''}`.trim()
+  }
+  return rep.kunde_name_legacy || rep.kunde_name || null
+}
+
+// Kunden-Telefon aus DB oder Legacy
+const getKundenTelefon = (rep) => {
+  if (rep.kunde?.telefon) return rep.kunde.telefon
+  return rep.kunde_telefon_legacy || rep.kunde_telefon || null
+}
+
+// Kundennummer (nur bei DB-Kunden)
+const getKundennummer = (rep) => {
+  return rep.kunde?.kundennummer || null
+}
+
+// Ist Kunde aus Datenbank?
+const hasDBKunde = (rep) => {
+  return !!rep.kunde_id && !!rep.kunde
+}
+
 export default function ReparaturenListe() {
   const [reparaturen, setReparaturen] = useState([])
   const [loading, setLoading] = useState(true)
@@ -75,15 +100,18 @@ export default function ReparaturenListe() {
     }
   }
 
-  // Filter
+  // Filter (erweitert für neue Kunden-Felder)
   const filteredReparaturen = reparaturen.filter(rep => {
     const matchesStatus = statusFilter === 'alle' || rep.status === statusFilter
     const matchesBezahlt = bezahltFilter === 'alle' || 
       (bezahltFilter === 'bezahlt' && rep.bezahlt) ||
       (bezahltFilter === 'unbezahlt' && !rep.bezahlt)
+    
+    // Suche: Auftragsnr, Kunde (DB oder Legacy), Fahrradmarke
+    const kundenName = getKundenName(rep) || ''
     const matchesSearch = searchTerm === '' ||
       rep.auftragsnummer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (rep.kunde_name && rep.kunde_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      kundenName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rep.fahrradmarke.toLowerCase().includes(searchTerm.toLowerCase())
     
     return matchesStatus && matchesBezahlt && matchesSearch
@@ -228,122 +256,136 @@ export default function ReparaturenListe() {
                   </td>
                 </tr>
               ) : (
-                filteredReparaturen.map(rep => (
-                  <tr key={rep.id} className="hover:bg-gray-50">
-                    {/* Auftragsnr */}
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-blue-600">{rep.auftragsnummer}</div>
-                      <div className="text-xs text-gray-500">{formatDateTime(rep.created_at)}</div>
-                    </td>
+                filteredReparaturen.map(rep => {
+                  // Kunden-Daten extrahieren
+                  const kundenName = getKundenName(rep)
+                  const kundenTelefon = getKundenTelefon(rep)
+                  const kundennummer = getKundennummer(rep)
+                  const istDBKunde = hasDBKunde(rep)
+                  
+                  return (
+                    <tr key={rep.id} className="hover:bg-gray-50">
+                      {/* Auftragsnr */}
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-blue-600">{rep.auftragsnummer}</div>
+                        <div className="text-xs text-gray-500">{formatDateTime(rep.created_at)}</div>
+                      </td>
 
-                    {/* Fahrrad */}
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{rep.fahrradmarke}</div>
-                      {rep.fahrradmodell && (
-                        <div className="text-sm text-gray-600">{rep.fahrradmodell}</div>
-                      )}
-                    </td>
+                      {/* Fahrrad */}
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{rep.fahrradmarke}</div>
+                        {rep.fahrradmodell && (
+                          <div className="text-sm text-gray-600">{rep.fahrradmodell}</div>
+                        )}
+                      </td>
 
-                    {/* Kunde */}
-                    <td className="px-4 py-3">
-                      {rep.kunde_name ? (
-                        <>
-                          <div className="font-medium">{rep.kunde_name}</div>
-                          {rep.kunde_telefon && (
-                            <div className="text-sm text-gray-600">📞 {rep.kunde_telefon}</div>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
+                      {/* Kunde (NEU: mit DB-Support) */}
+                      <td className="px-4 py-3">
+                        {kundenName ? (
+                          <>
+                            <div className="font-medium">{kundenName}</div>
+                            {kundennummer && (
+                              <div className="text-xs text-blue-600 font-mono">#{kundennummer}</div>
+                            )}
+                            {kundenTelefon && (
+                              <div className="text-sm text-gray-600">📞 {kundenTelefon}</div>
+                            )}
+                            {!istDBKunde && (
+                              <div className="text-xs text-orange-500 italic">Freitext</div>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
 
-                    {/* Mängel */}
-                    <td className="px-4 py-3">
-                      <div className="text-sm max-w-xs truncate" title={rep.maengelbeschreibung}>
-                        {rep.maengelbeschreibung}
-                      </div>
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-4 py-3">
-                      <select
-                        value={rep.status}
-                        onChange={(e) => handleStatusChange(rep.id, e.target.value)}
-                        className="text-sm border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <option value="angenommen">Angenommen</option>
-                        <option value="in_arbeit">In Arbeit</option>
-                        <option value="wartet_auf_teile">Wartet auf Teile</option>
-                        <option value="fertig">Fertig</option>
-                        <option value="abgeholt">Abgeholt</option>
-                        <option value="storniert">Storniert</option>
-                      </select>
-                    </td>
-
-                    {/* Termin */}
-                    <td className="px-4 py-3 text-sm">
-                      {rep.fertig_bis ? (
-                        <div>
-                          <div className="text-gray-600">Bis: {formatDate(rep.fertig_bis)}</div>
-                          {rep.fertig_am && (
-                            <div className="text-green-600">✓ {formatDate(rep.fertig_am)}</div>
-                          )}
+                      {/* Mängel */}
+                      <td className="px-4 py-3">
+                        <div className="text-sm max-w-xs truncate" title={rep.maengelbeschreibung}>
+                          {rep.maengelbeschreibung}
                         </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
+                      </td>
 
-                    {/* Preis */}
-                    <td className="px-4 py-3 text-right">
-                      {rep.endbetrag ? (
-                        <div>
-                          <div className="font-semibold">{rep.endbetrag.toFixed(2)} €</div>
-                          {rep.bezahlt ? (
-                            <span className="text-xs text-green-600">✓ Bezahlt</span>
-                          ) : (
-                            <span className="text-xs text-red-600">Offen</span>
-                          )}
-                        </div>
-                      ) : rep.kostenvoranschlag ? (
-                        <div className="text-sm text-gray-600">
-                          KVA: {rep.kostenvoranschlag.toFixed(2)} €
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-
-                    {/* Anwesend */}
-                    <td className="px-4 py-3">
-                      {rep.fahrrad_anwesend ? (
-                        <span className="text-green-600 font-semibold">✓ Ja</span>
-                      ) : (
-                        <span className="text-red-600">✗ Nein</span>
-                      )}
-                    </td>
-
-                    {/* Aktionen */}
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => setSelectedReparatur(rep)}
-                          className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-medium"
+                      {/* Status */}
+                      <td className="px-4 py-3">
+                        <select
+                          value={rep.status}
+                          onChange={(e) => handleStatusChange(rep.id, e.target.value)}
+                          className="text-sm border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          Bearbeiten
-                        </button>
-                        <button
-                          onClick={() => handleDelete(rep.id)}
-                          className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-medium"
-                        >
-                          Löschen
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          <option value="angenommen">Angenommen</option>
+                          <option value="in_arbeit">In Arbeit</option>
+                          <option value="wartet_auf_teile">Wartet auf Teile</option>
+                          <option value="fertig">Fertig</option>
+                          <option value="abgeholt">Abgeholt</option>
+                          <option value="storniert">Storniert</option>
+                        </select>
+                      </td>
+
+                      {/* Termin */}
+                      <td className="px-4 py-3 text-sm">
+                        {rep.fertig_bis ? (
+                          <div>
+                            <div className="text-gray-600">Bis: {formatDate(rep.fertig_bis)}</div>
+                            {rep.fertig_am && (
+                              <div className="text-green-600">✓ {formatDate(rep.fertig_am)}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+
+                      {/* Preis */}
+                      <td className="px-4 py-3 text-right">
+                        {rep.endbetrag ? (
+                          <div>
+                            <div className="font-semibold">{rep.endbetrag.toFixed(2)} €</div>
+                            {rep.bezahlt ? (
+                              <span className="text-xs text-green-600">✓ Bezahlt</span>
+                            ) : (
+                              <span className="text-xs text-red-600">Offen</span>
+                            )}
+                          </div>
+                        ) : rep.kostenvoranschlag ? (
+                          <div className="text-sm text-gray-600">
+                            KVA: {rep.kostenvoranschlag.toFixed(2)} €
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+
+                      {/* Anwesend */}
+                      <td className="px-4 py-3">
+                        {rep.fahrrad_anwesend ? (
+                          <span className="text-green-600 font-semibold">✓ Ja</span>
+                        ) : (
+                          <span className="text-red-600">✗ Nein</span>
+                        )}
+                      </td>
+
+                      {/* Aktionen */}
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => setSelectedReparatur(rep)}
+                            className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-medium"
+                          >
+                            Bearbeiten
+                          </button>
+                          <button
+                            onClick={() => handleDelete(rep.id)}
+                            className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-medium"
+                          >
+                            Löschen
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>

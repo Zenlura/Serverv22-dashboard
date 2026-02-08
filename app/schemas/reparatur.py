@@ -55,10 +55,11 @@ class ReparaturBase(BaseModel):
     schluesselnummer: Optional[str] = Field(None, max_length=50)
     fahrrad_anwesend: bool = False
     
-    # Kunde (optional)
-    kunde_name: Optional[str] = Field(None, max_length=200)
-    kunde_telefon: Optional[str] = Field(None, max_length=50)
-    kunde_email: Optional[str] = Field(None, max_length=200)
+    # Kunde (NEU: aus Datenbank ODER Legacy-Freitext)
+    kunde_id: Optional[int] = None  # Verknüpfung zu kunden.id
+    kunde_name: Optional[str] = Field(None, max_length=200)  # Legacy/Fallback
+    kunde_telefon: Optional[str] = Field(None, max_length=50)  # Legacy/Fallback
+    kunde_email: Optional[str] = Field(None, max_length=200)  # Legacy/Fallback
     
     # Reparatur
     maengelbeschreibung: str = Field(..., min_length=1)
@@ -88,7 +89,8 @@ class ReparaturUpdate(BaseModel):
     schluesselnummer: Optional[str] = Field(None, max_length=50)
     fahrrad_anwesend: Optional[bool] = None
     
-    # Kunde
+    # Kunde (NEU: aus Datenbank ODER Legacy)
+    kunde_id: Optional[int] = None
     kunde_name: Optional[str] = Field(None, max_length=200)
     kunde_telefon: Optional[str] = Field(None, max_length=50)
     kunde_email: Optional[str] = Field(None, max_length=200)
@@ -120,6 +122,13 @@ class ReparaturResponse(ReparaturBase):
     id: int
     auftragsnummer: str
     
+    # Kunde-Daten (erweitert)
+    kunde_id: Optional[int] = None
+    kunde: Optional[dict] = None  # Kunde-Objekt aus DB (wenn verknüpft)
+    kunde_name_legacy: Optional[str] = None  # Alte Freitext-Daten
+    kunde_telefon_legacy: Optional[str] = None
+    kunde_email_legacy: Optional[str] = None
+    
     # Zusätzliche Felder für Response
     reparaturdatum: datetime
     fertig_am: Optional[datetime] = None
@@ -145,7 +154,13 @@ class ReparaturListItem(BaseModel):
     fahrradmarke: str
     fahrradmodell: Optional[str] = None
     fahrrad_anwesend: bool
-    kunde_name: Optional[str] = None
+    
+    # Kunde-Daten (erweitert)
+    kunde_id: Optional[int] = None
+    kunde: Optional[dict] = None  # Kunde-Objekt (kundennummer, vorname, nachname)
+    kunde_name: Optional[str] = None  # Computed: kunde.nachname ODER kunde_name_legacy
+    kunde_name_legacy: Optional[str] = None
+    
     maengelbeschreibung: str
     status: str
     reparaturdatum: datetime
