@@ -530,7 +530,7 @@ const BestellungBearbeitenModal = ({ bestellung, onClose, onUpdate }) => {
                           <div className="text-sm text-gray-500 mt-1">
                             {position.menge}× à {Number(position.einzelpreis).toFixed(2)} € = {' '}
                             <span className="font-semibold text-gray-900">
-                              {(position.menge * position.einzelpreis).toFixed(2)} €
+                              {(Number(position.menge) * Number(position.einzelpreis)).toFixed(2)} €
                             </span>
                           </div>
                         </div>

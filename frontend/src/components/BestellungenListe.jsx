@@ -227,7 +227,7 @@ const BestellungenListe = ({ onNewBestellung, onEditBestellung, onWareneingangCl
             
             <div className="flex items-center gap-3">
               <span className="text-gray-600">
-                EK: <span className="font-medium">{bestellung.gesamtsumme_ek?.toFixed(2) || '0.00'} €</span>
+                EK: <span className="font-medium">{(Number(bestellung.gesamtsumme_ek) || 0).toFixed(2)} €</span>
               </span>
             </div>
           </div>

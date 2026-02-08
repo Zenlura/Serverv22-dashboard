@@ -299,7 +299,7 @@ export const BestellungModal = ({ bestellung, onClose, onSave }) => {
 
                         {/* Summe */}
                         <div className="col-span-2 text-right text-sm text-gray-600">
-                          Summe EK: <span className="font-medium">{(pos.menge_bestellt * pos.einkaufspreis).toFixed(2)} €</span>
+                          Summe EK: <span className="font-medium">{(Number(pos.menge_bestellt) * Number(pos.einkaufspreis)).toFixed(2)} €</span>
                         </div>
                       </div>
 
@@ -332,7 +332,7 @@ export const BestellungModal = ({ bestellung, onClose, onSave }) => {
             {formData.positionen.length > 0 && (
               <span>
                 Gesamt EK: <span className="font-bold">
-                  {formData.positionen.reduce((sum, pos) => sum + (pos.menge_bestellt * pos.einkaufspreis), 0).toFixed(2)} €
+                  {formData.positionen.reduce((sum, pos) => sum + (Number(pos.menge_bestellt) * Number(pos.einkaufspreis)), 0).toFixed(2)} €
                 </span>
               </span>
             )}
