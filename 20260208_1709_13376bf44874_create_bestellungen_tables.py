@@ -14,8 +14,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers
-revision = 'create_bestellungen'
-down_revision = None  # WICHTIG: Hier die letzte Migration-ID eintragen!
+revision = '13376bf44874'
+down_revision = 'b15fca79705b'
 branch_labels = None
 depends_on = None
 
